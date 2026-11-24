@@ -36,7 +36,7 @@ const outageS = new Schema({
   affectedHouses: { type: Number, default: 1 },
   affectedResidents: { type: Number, default: 100 },
   confirmations: { type: Number, default: 0 },
-  createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: false },
 }, { timestamps: true, ...J });
 outageS.index({ location: '2dsphere' });
 outageS.virtual('lat').get(function () { return this.location.coordinates[1]; });

@@ -6,9 +6,13 @@ import * as G from '../controllers/organizations.js';
 import * as D from '../controllers/admin.js';
 const r = Router(), org = [protect, role('organization', 'admin'), orgScope], adm = [protect, role('admin')], privileged = [protect, role('organization', 'admin')];
 r.post('/auth/register', A.register); r.post('/auth/login', A.login); r.get('/auth/me', protect, A.me);
+<<<<<<< HEAD
 r.post('/outages', protect, O.create); r.get('/outages', O.list); r.get('/outages/:id', optionalAuth, O.getOne);
 r.delete('/outages/:id', protect, O.remove);
 r.patch('/outages/:id', ...privileged, O.updateOutage);
+=======
+r.post('/outages', optionalAuth, O.create); r.get('/outages', O.list); r.get('/outages/:id', optionalAuth, O.getOne);
+>>>>>>> 1c88a52 (Initial project)
 r.post('/outages/:id/confirm', protect, O.confirm); r.patch('/outages/:id/status', ...org, O.setStatus);
 r.get('/organizations/dashboard', ...org, G.dashboard); r.get('/organizations/outages', ...org, G.list); r.get('/organizations/export/csv', ...org, G.exportCsv);
 r.get('/admin/users', ...adm, D.users); r.patch('/admin/users/:id', ...adm, D.updateUser);

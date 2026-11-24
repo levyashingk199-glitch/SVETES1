@@ -10,6 +10,7 @@ export const create = wrap(async (req, res) => {
   if (description.length < 3 || description.length > 1000) throw new AppError('Описание: от 3 до 1000 символов');
   const lat = parseFloat(req.body.lat), lng = parseFloat(req.body.lng);
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) throw new AppError('Неверные координаты');
+<<<<<<< HEAD
 
   const status = req.body.status && STATUSES.includes(req.body.status)
     ? req.body.status
@@ -33,6 +34,9 @@ export const create = wrap(async (req, res) => {
     affectedResidents: Number(req.body.affectedResidents) || 100,
     createdBy: req.user._id,
   });
+=======
+  const o = await Outage.create({ type, description, address: String(address || '').slice(0, 200), location: { type: 'Point', coordinates: [lng, lat] }, createdBy: req.user?._id || null });
+>>>>>>> 1c88a52 (Initial project)
   emit(req, 'outage:created', o);
   res.status(201).json(o);
 });
