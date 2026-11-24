@@ -7,6 +7,35 @@ import { MapPin, X } from 'lucide-react';
 // Tashkent Center coordinates
 export const TASHKENT_CENTER = [41.3111, 69.2797];
 
+// --- Helpers: точка может прийти в разных форматах (локальная / с бэкенда) ---
+const getId = (inc) => inc?.id || inc?._id;
+
+// Возвращает [lat, lng] или null
+const getCoords = (inc) => {
+  if (!inc) return null;
+  const ok = (a) => Array.isArray(a) && a.length === 2 && a.every((n) => Number.isFinite(Number(n)));
+  if (ok(inc.coordinates)) return [Number(inc.coordinates[0]), Number(inc.coordinates[1])];
+  const lc = inc.location?.coordinates; // backend GeoJSON: [lng, lat]
+  if (ok(lc)) return [Number(lc[1]), Number(lc[0])];
+  if (Number.isFinite(Number(inc.lat)) && Number.isFinite(Number(inc.lng)) && inc.lat !== null && inc.lng !== null) {
+    return [Number(inc.lat), Number(inc.lng)];
+  }
+  return null;
+};
+
+// ISO-дату с бэкенда показываем читаемо, обычные строки не трогаем
+const fmtTime = (v) => {
+  if (!v) return '—';
+  const s = String(v);
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
+    const d = new Date(s);
+    if (!isNaN(d)) {
+      return d.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    }
+  }
+  return s;
+};
+
 // Clean SvetaNet-inspired civic markers (no AI purple/neon)
 const createMarkerIcon = (type, status, reportsCount = 0, isSelected = false) => {
   let bgColor = '#d97706'; // Amber for electricity
@@ -164,148 +193,166 @@ export default function IncidentMap({
     markerMapRef.current.clear();
 
     incidents.forEach((inc) => {
-      const isSelected = selectedIncident && (selectedIncident.id === inc.id || selectedIncident._id === inc.id);
-      const icon = createMarkerIcon(inc.type, inc.status, inc.reportsCount, isSelected);
+      // Одна «битая» точка не должна ломать отрисовку остальных
+      try {
+        const incId = getId(inc);
+        const coords = getCoords(inc);
+        if (!coords) {
+          console.warn('Точка без координат, не показана на карте:', inc);
+          return;
+        }
 
-      const marker = L.marker(inc.coordinates, { icon });
+        const isSelected = selectedIncident && getId(selectedIncident) === incId;
+        const reports = inc.reportsCount ?? inc.confirmations ?? 0;
+        const icon = createMarkerIcon(inc.type, inc.status, reports, isSelected);
 
-      // Outage area circle (warm natural civic colors)
-      let circleColor = '#d97706';
-      if (inc.type === INCIDENT_TYPES.WATER) circleColor = '#0284c7';
-      if (inc.type === INCIDENT_TYPES.GAS) circleColor = '#ea580c';
-      if (inc.status === INCIDENT_STATUSES.RESOLVED) circleColor = '#16a34a';
+        const marker = L.marker(coords, { icon });
 
-      const isPlanned = inc.status === INCIDENT_STATUSES.PLANNED;
+        // Outage area circle (warm natural civic colors)
+        let circleColor = '#d97706';
+        if (inc.type === INCIDENT_TYPES.WATER) circleColor = '#0284c7';
+        if (inc.type === INCIDENT_TYPES.GAS) circleColor = '#ea580c';
+        if (inc.status === INCIDENT_STATUSES.RESOLVED) circleColor = '#16a34a';
 
-      const circle = L.circle(inc.coordinates, {
-        radius: inc.impactRadius || 250,
-        color: circleColor,
-        weight: isSelected ? 2.5 : 1.5,
-        opacity: isSelected ? 0.85 : 0.45,
-        fillColor: circleColor,
-        fillOpacity: isSelected ? 0.18 : 0.08,
-        dashArray: isPlanned ? '5, 5' : inc.status === INCIDENT_STATUSES.RESOLVED ? '4, 4' : undefined,
-      });
-      circlesLayer.addLayer(circle);
+        const isPlanned = inc.status === INCIDENT_STATUSES.PLANNED;
+        const isResolved = inc.status === INCIDENT_STATUSES.RESOLVED;
+        const isInProgress = inc.status === INCIDENT_STATUSES.IN_PROGRESS;
 
-      // Clean SvetaNet popup content
-      const statusText = isPlanned
-        ? '<span class="status-pill pill-planned">⏳ Скоро работы</span>'
-        : inc.status === INCIDENT_STATUSES.ACTIVE
-        ? '<span class="status-pill pill-red">Отключено</span>'
-        : inc.status === INCIDENT_STATUSES.IN_PROGRESS
-        ? '<span class="status-pill pill-amber">Идут работы</span>'
-        : '<span class="status-pill pill-green">Восстановлено</span>';
+        const circle = L.circle(coords, {
+          radius: inc.impactRadius || 250,
+          color: circleColor,
+          weight: isSelected ? 2.5 : 1.5,
+          opacity: isSelected ? 0.85 : 0.45,
+          fillColor: circleColor,
+          fillOpacity: isSelected ? 0.18 : 0.08,
+          dashArray: isPlanned ? '5, 5' : isResolved ? '4, 4' : undefined,
+        });
+        circlesLayer.addLayer(circle);
 
-      const reportsHtml = inc.reportsCount
-        ? `<div class="popup-reports">👥 <strong>${inc.reportsCount}</strong> подтверждений жителей</div>`
-        : '';
+        // Clean SvetaNet popup content
+        const statusText = isPlanned
+          ? '<span class="status-pill pill-planned">⏳ Скоро работы</span>'
+          : isResolved
+          ? '<span class="status-pill pill-green">Восстановлено</span>'
+          : isInProgress
+          ? '<span class="status-pill pill-amber">Идут работы</span>'
+          : '<span class="status-pill pill-red">Отключено</span>';
 
-      const progress = typeof inc.progress === 'number'
-        ? inc.progress
-        : isPlanned
-        ? 15
-        : inc.status === 'resolved'
-        ? 100
-        : 50;
+        const reportsHtml = reports
+          ? `<div class="popup-reports">👥 <strong>${reports}</strong> подтверждений жителей</div>`
+          : '';
 
-      const progressHtml = `
-        <div class="popup-progress-block">
-          <div class="popup-progress-label">
-            <span>Прогресс: <strong>${progress}%</strong></span>
-            <span class="popup-stage-tag">${inc.processStage || (isPlanned ? 'Подготовка' : 'В работе')}</span>
-          </div>
-          <div class="popup-progress-bar">
-            <div class="popup-progress-fill fill-${inc.status}" style="width: ${progress}%"></div>
-          </div>
-        </div>
-      `;
+        const progress = typeof inc.progress === 'number'
+          ? inc.progress
+          : isPlanned
+          ? 15
+          : isResolved
+          ? 100
+          : 50;
 
-      const adminActionsHtml = isAdmin
-        ? `
-          <div class="popup-admin-controls">
-            <button class="popup-admin-btn btn-edit-proc" id="popup-admin-edit-${inc.id}">
-              ⚙️ Изменить процесс
-            </button>
-            <button class="popup-admin-btn btn-del-point" id="popup-admin-del-${inc.id}">
-              🗑 Удалить точку
-            </button>
-          </div>
-        `
-        : '';
-
-      const timeRowHtml = isPlanned
-        ? `
-          <div class="popup-time-row">
-            <div>Начало работ: <strong>${inc.plannedStart || inc.reportedAt}</strong></div>
-            <div>Ориентир завершения: <strong>${inc.estimatedResolution}</strong></div>
-          </div>
-        `
-        : `
-          <div class="popup-time-row">
-            <div>Отключено: <strong>${inc.reportedAt.split(' ')[1] || inc.reportedAt}</strong></div>
-            <div>Ориентир включения: <strong>${inc.estimatedResolution.split(' ')[1] || inc.estimatedResolution}</strong></div>
+        const progressHtml = `
+          <div class="popup-progress-block">
+            <div class="popup-progress-label">
+              <span>Прогресс: <strong>${progress}%</strong></span>
+              <span class="popup-stage-tag">${inc.processStage || (isPlanned ? 'Подготовка' : 'В работе')}</span>
+            </div>
+            <div class="popup-progress-bar">
+              <div class="popup-progress-fill fill-${inc.status}" style="width: ${progress}%"></div>
+            </div>
           </div>
         `;
 
-      const popupHtml = `
-        <div class="svetanet-popup ${isPlanned ? 'popup-is-planned' : ''}">
-          <div class="popup-top">
-            <span class="popup-district">${inc.district} р-н</span>
-            ${statusText}
+        const adminActionsHtml = isAdmin
+          ? `
+            <div class="popup-admin-controls">
+              <button class="popup-admin-btn btn-edit-proc" id="popup-admin-edit-${incId}">
+                ⚙️ Изменить процесс
+              </button>
+              <button class="popup-admin-btn btn-del-point" id="popup-admin-del-${incId}">
+                🗑 Удалить точку
+              </button>
+            </div>
+          `
+          : '';
+
+        const reportedStr = fmtTime(inc.reportedAt || inc.createdAt);
+        const resolutionStr = fmtTime(inc.estimatedResolution);
+
+        const timeRowHtml = isPlanned
+          ? `
+            <div class="popup-time-row">
+              <div>Начало работ: <strong>${fmtTime(inc.plannedStart) !== '—' ? fmtTime(inc.plannedStart) : reportedStr}</strong></div>
+              <div>Ориентир завершения: <strong>${resolutionStr}</strong></div>
+            </div>
+          `
+          : `
+            <div class="popup-time-row">
+              <div>Отключено: <strong>${reportedStr.split(' ')[1] || reportedStr}</strong></div>
+              <div>Ориентир включения: <strong>${resolutionStr.split(' ')[1] || resolutionStr}</strong></div>
+            </div>
+          `;
+
+        const popupHtml = `
+          <div class="svetanet-popup ${isPlanned ? 'popup-is-planned' : ''}">
+            <div class="popup-top">
+              <span class="popup-district">${inc.district || ''} р-н</span>
+              ${statusText}
+            </div>
+            <h4 class="popup-title">${inc.title || 'Без названия'}</h4>
+            <div class="popup-mahalla">📍 ${inc.mahalla || inc.district || ''}</div>
+            <div class="popup-address">${inc.address || ''}</div>
+            ${reportsHtml}
+            ${progressHtml}
+            ${timeRowHtml}
+            <button class="popup-action-btn" id="popup-btn-${incId}">
+              Подробнее и контакты службы →
+            </button>
+            ${adminActionsHtml}
           </div>
-          <h4 class="popup-title">${inc.title}</h4>
-          <div class="popup-mahalla">📍 ${inc.mahalla || inc.district}</div>
-          <div class="popup-address">${inc.address}</div>
-          ${reportsHtml}
-          ${progressHtml}
-          ${timeRowHtml}
-          <button class="popup-action-btn" id="popup-btn-${inc.id}">
-            Подробнее и контакты службы →
-          </button>
-          ${adminActionsHtml}
-        </div>
-      `;
+        `;
 
-      marker.bindPopup(popupHtml, {
-        className: 'svetanet-leaflet-popup',
-        maxWidth: 340,
-        minWidth: 270,
-      });
+        marker.bindPopup(popupHtml, {
+          className: 'svetanet-leaflet-popup',
+          maxWidth: 340,
+          minWidth: 270,
+        });
 
-      marker.on('click', () => {
-        onSelectIncident(inc);
-      });
+        marker.on('click', () => {
+          onSelectIncident(inc);
+        });
 
-      marker.on('popupopen', () => {
-        const btn = document.getElementById(`popup-btn-${inc.id}`);
-        if (btn) {
-          btn.onclick = () => {
-            onOpenDetails(inc);
-          };
-        }
-
-        if (isAdmin) {
-          const editBtn = document.getElementById(`popup-admin-edit-${inc.id}`);
-          if (editBtn) {
-            editBtn.onclick = () => {
-              if (onOpenAdminWithPoint) onOpenAdminWithPoint(inc);
+        marker.on('popupopen', () => {
+          const btn = document.getElementById(`popup-btn-${incId}`);
+          if (btn) {
+            btn.onclick = () => {
+              onOpenDetails(inc);
             };
           }
 
-          const delBtn = document.getElementById(`popup-admin-del-${inc.id}`);
-          if (delBtn) {
-            delBtn.onclick = () => {
-              if (window.confirm(`Удалить точку "${inc.title}" с карты?`)) {
-                if (onDeletePoint) onDeletePoint(inc.id);
-              }
-            };
-          }
-        }
-      });
+          if (isAdmin) {
+            const editBtn = document.getElementById(`popup-admin-edit-${incId}`);
+            if (editBtn) {
+              editBtn.onclick = () => {
+                if (onOpenAdminWithPoint) onOpenAdminWithPoint(inc);
+              };
+            }
 
-      markersLayer.addLayer(marker);
-      markerMapRef.current.set(inc.id, marker);
+            const delBtn = document.getElementById(`popup-admin-del-${incId}`);
+            if (delBtn) {
+              delBtn.onclick = () => {
+                if (window.confirm(`Удалить точку "${inc.title || 'без названия'}" с карты?`)) {
+                  if (onDeletePoint) onDeletePoint(incId);
+                }
+              };
+            }
+          }
+        });
+
+        markersLayer.addLayer(marker);
+        markerMapRef.current.set(incId, marker);
+      } catch (err) {
+        console.error('Не удалось отрисовать точку на карте:', inc, err);
+      }
     });
   }, [incidents, selectedIncident, onSelectIncident, onOpenDetails, isAdmin, onDeletePoint, onOpenAdminWithPoint]);
 
@@ -314,8 +361,11 @@ export default function IncidentMap({
     const map = mapInstanceRef.current;
     if (!map || !selectedIncident) return;
 
-    const marker = markerMapRef.current.get(selectedIncident.id);
-    map.flyTo(selectedIncident.coordinates, 15, {
+    const coords = getCoords(selectedIncident);
+    if (!coords) return;
+
+    const marker = markerMapRef.current.get(getId(selectedIncident));
+    map.flyTo(coords, 15, {
       animate: true,
       duration: 0.8,
     });

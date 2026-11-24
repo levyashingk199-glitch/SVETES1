@@ -3,6 +3,16 @@ import { TYPES, STATUSES, AppError, wrap } from '../utils/helpers.js';
 import { buildFilter } from '../services/outages.js';
 const emit = (req, ev, o) => req.app.get('io').emit(ev, o.toJSON ? o.toJSON() : o);
 
+// Узбекистан: +998 XX XXX XX XX (мобильные коды операторов и ташкентский 71)
+const UZ_CODES = ['20', '33', '50', '55', '71', '77', '88', '90', '91', '93', '94', '95', '97', '98', '99'];
+const normalizePhone = (v) => {
+  const d = String(v || '').replace(/\D/g, '');
+  const n = d.length === 9 ? '998' + d : d;
+  if (!/^998\d{9}$/.test(n)) return null;
+  if (!UZ_CODES.includes(n.slice(3, 5))) return null;
+  return '+' + n;
+};
+
 export const create = wrap(async (req, res) => {
   const { type, address, title, district, mahalla, plannedStart, estimatedResolution, progress, processStage, isPlanned } = req.body;
   const description = String(req.body.description || '').trim();
@@ -10,7 +20,34 @@ export const create = wrap(async (req, res) => {
   if (description.length < 3 || description.length > 1000) throw new AppError('Описание: от 3 до 1000 символов');
   const lat = parseFloat(req.body.lat), lng = parseFloat(req.body.lng);
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) throw new AppError('Неверные координаты');
-  const o = await Outage.create({ type, description, address: String(address || '').slice(0, 200), location: { type: 'Point', coordinates: [lng, lat] }, createdBy: req.user?._id || null });
+  const isStaff = ['admin', 'organization'].includes(req.user?.role);
+  let phone = normalizePhone(req.body.phone);
+  if (!phone && !isStaff) throw new AppError('Укажите корректный номер телефона: +998 XX XXX XX XX');
+  phone = phone || '';
+
+  const status = req.body.status && STATUSES.includes(req.body.status)
+    ? req.body.status
+    : (isPlanned ? 'planned' : 'pending');
+
+  const o = await Outage.create({
+    type,
+    title: String(title || (isPlanned ? 'Плановые работы' : 'Аварийное отключение')).slice(0, 200),
+    description,
+    address: String(address || '').slice(0, 250),
+    district: String(district || 'Юнусабадский'),
+    mahalla: String(mahalla || ''),
+    location: { type: 'Point', coordinates: [lng, lat] },
+    status,
+    progress: Number(progress) || (status === 'resolved' ? 100 : status === 'in_progress' ? 50 : 0),
+    processStage: String(processStage || ''),
+    isPlanned: Boolean(isPlanned || status === 'planned'),
+    plannedStart: String(plannedStart || ''),
+    estimatedResolution: String(estimatedResolution || ''),
+    affectedHouses: Number(req.body.affectedHouses) || 1,
+    affectedResidents: Number(req.body.affectedResidents) || 100,
+    phone,
+    createdBy: req.user?._id || null,
+  });
   emit(req, 'outage:created', o);
   res.status(201).json(o);
 });
@@ -59,7 +96,11 @@ export const updateOutage = wrap(async (req, res) => {
   res.json(o);
 });
 
-export const list = wrap(async (req, res) => res.json(await Outage.find(buildFilter(req.query)).sort('-createdAt').limit(500)));
+export const list = wrap(async (req, res) => {
+  const docs = await Outage.find(buildFilter(req.query)).sort('-createdAt').limit(500);
+  const staff = ['admin', 'organization'].includes(req.user?.role);
+  res.json(staff ? docs.map((d) => ({ ...d.toJSON(), phone: d.phone || '' })) : docs);
+});
 export const getOne = wrap(async (req, res) => {
   const o = await Outage.findById(req.params.id);
   if (!o) throw new AppError('Авария не найдена', 404);

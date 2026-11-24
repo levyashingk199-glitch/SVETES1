@@ -105,6 +105,11 @@ export default function App() {
     try {
       savedPoint = await api.createOutage(pointData);
     } catch (err) {
+      // Кулдаун: не обходим лимит локальным сохранением
+      if (err.status >= 400 && err.status < 500) {
+        alert(err.message || 'Слишком часто. Подождите минуту перед следующей точкой');
+        throw err;
+      }
       console.warn('Backend create failed, saving in local mode:', err.message);
       const localId = `point-${Date.now()}`;
       savedPoint = {

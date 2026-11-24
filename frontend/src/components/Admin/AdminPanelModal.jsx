@@ -8,7 +8,7 @@ import {
   Sliders,
   MapPin,
   Calendar,
-  Clock,
+  Clock,  
   AlertTriangle,
   CheckCircle2,
   RefreshCw,
@@ -27,6 +27,7 @@ import {
   ArrowUpDown,
   Check,
   Copy,
+  Phone,
 } from 'lucide-react';
 import { INCIDENT_TYPES, INCIDENT_STATUSES, TASHKENT_DISTRICTS } from '../../data/incidents';
 import { api } from '../../api';
@@ -616,6 +617,16 @@ export default function AdminPanelModal({
                                     <MapPin size={12} className="text-muted" />
                                     <span>{pt.district}, {pt.mahalla ? `${pt.mahalla}, ` : ''}{pt.address}</span>
                                   </div>
+                                  {pt.phone && (
+                                    <a
+                                      className="coords-btn"
+                                      href={`tel:${pt.phone}`}
+                                      title="Позвонить заявителю"
+                                    >
+                                      <Phone size={11} />
+                                      <span>{pt.phone}</span>
+                                    </a>
+                                  )}
                                   {pt.coordinates && (
                                     <button
                                       type="button"
@@ -1147,11 +1158,11 @@ export default function AdminPanelModal({
                         alert('Нет данных для выгрузки: список точек пуст.');
                         return;
                       }
-                      const headers = 'ID,Тип,Статус,Прогресс,Район,Махалля,Адрес,Начало,Завершение,Откликов\n';
+                      const headers = 'ID,Тип,Статус,Прогресс,Район,Махалля,Адрес,Начало,Завершение,Откликов,Телефон\n';
                       const rows = incidents
                         .map(
                           (i) =>
-                            `"${i.id}","${i.type}","${i.status}","${i.progress || 0}%","${i.district}","${i.mahalla || ''}","${i.address}","${i.plannedStart || ''}","${i.estimatedResolution || ''}","${i.reportsCount || 0}"`
+                            `"${i.id}","${i.type}","${i.status}","${i.progress || 0}%","${i.district}","${i.mahalla || ''}","${i.address}","${i.plannedStart || ''}","${i.estimatedResolution || ''}","${i.reportsCount || 0}","${i.phone || ''}"`
                         )
                         .join('\n');
                       const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8;' });

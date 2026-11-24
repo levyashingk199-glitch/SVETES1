@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { TYPES, STATUSES } from '../utils/helpers.js';
 const { Schema } = mongoose;
-const J = { toJSON: { virtuals: true, versionKey: false, transform: (d, r) => { delete r.password; return r; } } };
+const J = { toJSON: { virtuals: true, versionKey: false, transform: (d, r) => { delete r.password; delete r.phone; return r; } } };
 
 export const Organization = mongoose.model('Organization', new Schema({
   name: { type: String, required: true, trim: true },
@@ -36,6 +36,7 @@ const outageS = new Schema({
   affectedHouses: { type: Number, default: 1 },
   affectedResidents: { type: Number, default: 100 },
   confirmations: { type: Number, default: 0 },
+  phone: { type: String, default: '' },
   createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: false },
 }, { timestamps: true, ...J });
 outageS.index({ location: '2dsphere' });

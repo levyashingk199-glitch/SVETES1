@@ -182,6 +182,7 @@ export function normalizeOutage(raw) {
     serviceTeam: raw.serviceTeam || raw.organization?.name || (type === 'electricity' ? 'РЭС Ташкента (1154)' : type === 'water' ? 'Тошкент шахар сув таъминоти (1055)' : 'Худудгаз Пойтахт (104)'),
     dispatcherContact: raw.dispatcherContact || raw.organization?.phone || (type === 'electricity' ? '1154' : type === 'water' ? '1055' : '104'),
     impactRadius: raw.impactRadius || raw.radius || 250,
+    ...(raw.phone ? { phone: raw.phone } : {}),
     measuresTaken: raw.measuresTaken || ['Заявка зарегистрирована в системе'],
     raw,
   };
@@ -223,6 +224,7 @@ export const api = {
       estimatedResolution: outageData.estimatedResolution || '',
       affectedHouses: outageData.affectedHouses || 1,
       affectedResidents: outageData.affectedResidents || 100,
+      phone: outageData.phone || '',
       lat,
       lng,
     };
@@ -230,7 +232,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload),
     });
-    return normalizeOutage(res.outage || res.data || res);
+    // сервер не возвращает телефон в ответе — оставляем введённый, чтобы он был виден сразу
+    return { ...normalizeOutage(res.outage || res.data || res), phone: outageData.phone || '' };
   },
 
   // DELETE /api/outages/:id
