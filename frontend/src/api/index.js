@@ -1,4 +1,5 @@
-// Base API configuration
+// В dev: VITE_API_URL не задан → используем Vite proxy '/api'
+// В prod: VITE_API_URL = 'https://warntech-api.onrender.com/api'
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 /**

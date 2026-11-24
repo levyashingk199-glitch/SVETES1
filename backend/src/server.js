@@ -12,7 +12,11 @@ import errorHandler from './middleware/error.js';
 const app = express();
 
 const PORT = process.env.PORT || 4000;
-const origin = process.env.CLIENT_URL || true;
+
+// CORS: в dev CLIENT_URL=http://localhost:5173, в prod — URL фронтенда на Render
+const allowedOrigins = process.env.CLIENT_URL
+  ? process.env.CLIENT_URL.split(',').map(s => s.trim())
+  : true;   // true = разрешить всё (только для локальной разработки без .env)
 
 // HTTP server
 const server = http.createServer(app);
