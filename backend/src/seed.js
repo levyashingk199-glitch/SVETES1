@@ -1,0 +1,13 @@
+import 'dotenv/config';
+import bcrypt from 'bcryptjs';
+import { connectDB, closeDB } from './config/db.js';
+import { User, Organization } from './models/index.js';
+await connectDB();
+let org = await Organization.findOne({ email: 'dispatch@netsveta.dev' }) || await Organization.create({ name: 'Городская диспетчерская', email: 'dispatch@netsveta.dev', serviceTypes: ['electricity', 'water', 'gas'] });
+const mk = async (name, email, password, role, organization) => { if (!(await User.exists({ email }))) await User.create({ name, email, password: await bcrypt.hash(password, 10), role, organization }); };
+await mk('Администратор', 'admin@netsveta.dev', 'admin123', 'admin');
+await mk('Диспетчер', 'org@netsveta.dev', 'org12345', 'organization', org._id);
+await mk('Пользователь A', 'a@netsveta.dev', 'user1234', 'user');
+await mk('Пользователь B', 'b@netsveta.dev', 'user1234', 'user');
+console.log('Seeded: admin@netsveta.dev/admin123, org@netsveta.dev/org12345, a@ & b@netsveta.dev/user1234');
+await closeDB();
