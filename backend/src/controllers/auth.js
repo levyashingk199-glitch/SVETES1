@@ -2,7 +2,8 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { User } from '../models/index.js';
 import { AppError, wrap } from '../utils/helpers.js';
-const sign = u => jwt.sign({ id: u._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+const JWT_SECRET = process.env.JWT_SECRET || 'warntech-secret-key-render-prod-fallback';
+const sign = u => jwt.sign({ id: u._id }, JWT_SECRET, { expiresIn: '7d' });
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const register = wrap(async (req, res) => {
   const name = String(req.body.name || '').trim(), email = String(req.body.email || '').toLowerCase(), password = String(req.body.password || '');

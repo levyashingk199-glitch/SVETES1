@@ -13,6 +13,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const resolveUri = async () => {
   let uri = process.env.MONGO_URI;
   if (uri) return uri;
+  if (process.env.NODE_ENV === 'production') {
+    console.warn('⚠️  [WARN] Переменная MONGO_URI не задана!');
+    console.warn('⚠️  Для сохранения данных на Render укажите MONGO_URI (например, из бесплатного MongoDB Atlas).');
+  }
   // MONGO_URI пуст -> встроенная MongoDB, данные в ./data/db
   if (!mem) {
     const { MongoMemoryServer } = await import('mongodb-memory-server');

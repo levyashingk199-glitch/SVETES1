@@ -71,6 +71,34 @@ VITE_API_URL=https://АДРЕС-ТВОЕГО-BACKEND/api
 - Файл `backend/.env` с секретами не включён.
 - Используй `.env.example` как шаблон и храни реальные ключи только локально или в переменных окружения хостинга.
 
+## Развертывание на Render (render.com)
+
+Поддерживаются 2 варианта деплоя:
+
+### Вариант 1: Через Blueprint (рекомендуется)
+1. Загрузите репозиторий на GitHub.
+2. В личном кабинете [Render Dashboard](https://dashboard.render.com/) нажмите **New +** → **Blueprint**.
+3. Выберите свой репозиторий — Render автоматически прочитает файл `render.yaml` и создаст два сервиса:
+   - **warntech-api** (Web Service, Node.js)
+   - **warntech-frontend** (Static Site, React)
+4. В переменных окружения укажите:
+   - `MONGO_URI` для бэкенда (строка подключения из бесплатного кластера MongoDB Atlas).
+   - `CLIENT_URL` для бэкенда: `https://warntech-frontend.onrender.com` (адрес фронтенда).
+   - `VITE_API_URL` для фронтенда: `https://warntech-api.onrender.com/api` (адрес бэкенда).
+
+### Вариант 2: Единым сервисом (All-in-One, 1 бесплатный сервис)
+1. В Render нажмите **New +** → **Web Service**.
+2. Укажите репозиторий.
+3. Настройки сервиса:
+   - **Root Directory**: (оставьте пустым)
+   - **Build Command**: `npm run build:all`
+   - **Start Command**: `npm start`
+4. Переменные окружения (Environment Variables):
+   - `NODE_ENV`: `production`
+   - `MONGO_URI`: строка подключения из MongoDB Atlas
+   - `JWT_SECRET`: любой секретный ключ (или нажмите Generate)
+5. Сервер автоматически раздаст и REST API (`/api`), и собранный веб-интерфейс без проблем с CORS.
+
 ## Всегда онлайн (24/7)
 
 Что сделано в коде:

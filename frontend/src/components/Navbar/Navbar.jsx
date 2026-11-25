@@ -9,6 +9,8 @@ export default function Navbar({
   isAdmin,
   onLogout,
   isApiOnline,
+  isApiChecking,
+  apiError,
   onRefreshApi,
   isSidebarOpen,
   onToggleSidebar,
@@ -40,13 +42,14 @@ export default function Navbar({
 
         {/* API Status Indicator */}
         <div
-          className={`api-status-badge ${isApiOnline ? 'api-online' : 'api-offline'}`}
-          title={isApiOnline ? 'Подключено к backend API' : 'Автономный режим работы'}
+          data-nosnippet
+          className={`api-status-badge ${isApiOnline ? 'api-online' : isApiChecking ? 'api-checking' : 'api-offline'}`}
+          title={isApiOnline ? 'Подключено к backend API' : isApiChecking ? 'Подключение к серверу…' : `Нет связи с сервером, переподключаемся… ${apiError || ''}`}
           onClick={onRefreshApi}
         >
           <span className="api-dot"></span>
           <span className="api-text">
-            {isApiOnline ? 'API Онлайн' : 'Офлайн'}
+            {isApiOnline ? 'API Онлайн' : isApiChecking ? 'Подключение…' : 'Нет связи'}
           </span>
           <RefreshCw size={12} className="api-refresh-icon" />
         </div>

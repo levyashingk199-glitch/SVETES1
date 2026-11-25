@@ -16,6 +16,8 @@ export default function App() {
   // Only real user & admin points; no fake mock data
   const [incidents, setIncidents] = useState(() => getLocalIncidents());
   const [backendConnected, setBackendConnected] = useState(false);
+  const [apiError, setApiError] = useState('');
+  const [apiChecking, setApiChecking] = useState(true); // true, пока идёт первая проверка API
   const [user, setUser] = useState(() => getSavedUser());
 
   // Modals state
@@ -46,11 +48,15 @@ export default function App() {
         setIncidents(items);
         setLocalIncidents(items);
         setBackendConnected(true);
+        setApiError('');
+        setApiChecking(false);
         return;
       }
     } catch (error) {
       console.warn('Backend is offline, using user local storage:', error.message);
       setBackendConnected(false);
+      setApiError(error.status ? `HTTP ${error.status}: ${error.message}` : (error.cause?.message || error.message));
+      setApiChecking(false);
     }
     // Load existing points saved by user/admin
     const saved = getLocalIncidents();
@@ -70,6 +76,13 @@ export default function App() {
 
     return stopWarmup;
   }, [loadOutages]);
+
+  // Пока API офлайн — пробуем переподключиться каждые 15 секунд (сервер на free-хостинге просыпается ~1 мин)
+  useEffect(() => {
+    if (backendConnected) return undefined;
+    const id = setInterval(() => { loadOutages(); }, 15000);
+    return () => clearInterval(id);
+  }, [backendConnected, loadOutages]);
 
   // Filtered incidents
   const filteredIncidents = useMemo(() => {
@@ -238,6 +251,8 @@ export default function App() {
         isAdmin={isAdmin}
         onLogout={handleLogout}
         isApiOnline={backendConnected}
+        isApiChecking={apiChecking}
+        apiError={apiError}
         onRefreshApi={loadOutages}
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}

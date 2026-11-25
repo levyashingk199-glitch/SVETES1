@@ -1,6 +1,9 @@
 // В dev: VITE_API_URL не задан → используем Vite proxy '/api'
-// В prod: VITE_API_URL = 'https://warntech-api.onrender.com/api'
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+// В prod: VITE_API_URL = 'https://warntech-api.onrender.com/api' или 'https://warntech-api.onrender.com'
+const rawApiUrl = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
+const API_BASE_URL = rawApiUrl
+  ? (rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`)
+  : '/api';
 
 /**
  * Storage helpers for Bearer token and current user
@@ -97,7 +100,8 @@ async function fetchWithRetry(url, config) {
  * Будит уснувший сервер и не даёт ему заснуть.
  */
 export function startApiWarmup(intervalMs = 5 * 60 * 1000) {
-  const ping = () => fetch(`${API_BASE_URL}/health`, { cache: 'no-store' }).catch(() => {});
+  const pingUrl = API_BASE_URL.endsWith('/api') ? `${API_BASE_URL}/health` : `${API_BASE_URL}/api/health`;
+  const ping = () => fetch(pingUrl, { cache: 'no-store' }).catch(() => {});
   ping();
   const id = setInterval(() => { if (!document.hidden) ping(); }, intervalMs);
   return () => clearInterval(id);
@@ -145,6 +149,19 @@ async function request(endpoint, options = {}) {
     return response.blob();
   }
 
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    const text = await response.text();
+    if (text.includes('<!DOCTYPE') || text.includes('<html')) {
+      throw new Error(`Сервер вернул HTML-страницу вместо JSON (${response.status}). Проверьте адрес VITE_API_URL.`);
+    }
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error(`Некорректный ответ сервера: ${text.slice(0, 120)}`);
+    }
+  }
+
   return response.json();
 }
 
@@ -178,7 +195,7 @@ export function normalizeOutage(raw) {
   }
 
   // Type normalization (electricity, water, gas)
-  let type = 'electricity';
+  let type;
   const rawType = (raw.type || raw.service || raw.category || '').toLowerCase();
   if (rawType.includes('water') || rawType.includes('сув') || rawType.includes('вод')) {
     type = 'water';
@@ -189,7 +206,7 @@ export function normalizeOutage(raw) {
   }
 
   // Status normalization (active, in_progress, resolved, planned)
-  let status = 'active';
+  let status;
   const rawStatus = (raw.status || '').toLowerCase();
   if (rawStatus === 'planned' || raw.isPlanned || rawStatus === 'план' || rawStatus === 'скоро работы') {
     status = 'planned';
