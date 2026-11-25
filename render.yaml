@@ -1,42 +1,20 @@
+# Один сервис на Render: backend (API) + собранный frontend на одном адресе.
+# Сайт:   https://<имя>.onrender.com/
+# API:    https://<имя>.onrender.com/api/health
 services:
-  # ── Backend (Node.js Web Service) ──────────────────────────────────────────
   - type: web
-    name: warntech-api
+    name: warntech
     runtime: node
-    rootDir: backend
-    buildCommand: npm install
-    startCommand: npm start
     plan: free
+    # rootDir не указываем — работаем из корня репозитория
+    buildCommand: npm install --include=dev --prefix frontend && npm run build --prefix frontend && npm install --prefix backend
+    startCommand: npm start --prefix backend
     healthCheckPath: /api/health
     autoDeploy: true
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 10000
       - key: JWT_SECRET
-        generateValue: true          # Render сгенерирует автоматически
+        generateValue: true
       - key: MONGO_URI
-        sync: false                  # Вставите вручную из MongoDB Atlas
-      - key: CLIENT_URL
-        sync: false                  # Вставите URL фронтенда после деплоя
-
-  # ── Frontend (Static Site) ─────────────────────────────────────────────────
-  - type: web
-    name: warntech-frontend
-    runtime: static
-    rootDir: frontend
-    buildCommand: npm install && npm run build
-    staticPublishPath: dist
-    plan: free
-    headers:
-      - path: /*
-        name: Cache-Control
-        value: no-cache
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    envVars:
-      - key: VITE_API_URL
-        sync: false                  # Вставите https://warntech-api.onrender.com/api
+        sync: false        # строка подключения из MongoDB Atlas

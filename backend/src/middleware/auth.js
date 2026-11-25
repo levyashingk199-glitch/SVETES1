@@ -1,11 +1,10 @@
 import jwt from 'jsonwebtoken';
 import { User, Organization } from '../models/index.js';
 import { AppError, wrap, TYPES } from '../utils/helpers.js';
-const JWT_SECRET = process.env.JWT_SECRET || 'warntech-secret-key-render-prod-fallback';
 const load = async req => {
   const h = req.headers.authorization || '';
   if (!h.startsWith('Bearer ')) return null;
-  try { const { id } = jwt.verify(h.slice(7), JWT_SECRET); return await User.findById(id); } catch { return null; }
+  try { const { id } = jwt.verify(h.slice(7), process.env.JWT_SECRET); return await User.findById(id); } catch { return null; }
 };
 export const protect = wrap(async (req, res, next) => {
   const u = await load(req);

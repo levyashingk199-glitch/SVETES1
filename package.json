@@ -6,13 +6,8 @@
     "install:all": "npm install --prefix frontend && npm install --prefix backend",
     "dev": "concurrently -k --restart-tries -1 --restart-after 2000 -n FRONTEND,BACKEND -c blue,green \"npm run dev --prefix frontend\" \"npm run dev --prefix backend\"",
     "build": "npm run build --prefix frontend",
-    "build:all": "npm run install:all && npm run build",
-    "start": "node backend/src/server.js",
     "start:backend": "npm start --prefix backend",
     "pm2:start": "pm2 start backend/ecosystem.config.cjs && pm2 save"
-  },
-  "engines": {
-    "node": ">=20.0.0"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

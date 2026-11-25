@@ -1,15 +1,6 @@
-// В dev (localhost): VITE_API_URL не задан → используем Vite proxy '/api'
-// В prod: если VITE_API_URL не задан и сайт не на самом бэкенде → используем 'https://warntech-api.onrender.com/api'
-const DEFAULT_PROD_API = 'https://warntech-api.onrender.com/api';
-const rawApiUrl = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
-const host = typeof window !== 'undefined' ? window.location.hostname : '';
-const isLocalHost = ['localhost', '127.0.0.1'].includes(host);
-const isBackendHost = host === 'warntech-api.onrender.com';
-const pointsToLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(rawApiUrl);
-const effectiveRawUrl = (!isLocalHost && pointsToLocalhost) ? '' : rawApiUrl;
-const API_BASE_URL = effectiveRawUrl
-  ? (effectiveRawUrl.endsWith('/api') ? effectiveRawUrl : `${effectiveRawUrl}/api`)
-  : (isLocalHost || isBackendHost ? '/api' : DEFAULT_PROD_API);
+// В dev: VITE_API_URL не задан → используем Vite proxy '/api'
+// В prod: VITE_API_URL = 'https://warntech-api.onrender.com/api'
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 /**
  * Storage helpers for Bearer token and current user
@@ -64,8 +55,8 @@ export const setLocalIncidents = (points) => {
  * а БД может на несколько секунд отвечать 503 при переподключении.
  * Повторяем только безопасные запросы (GET/HEAD) и сетевые сбои/502/503/504.
  */
-const REQUEST_TIMEOUT_MS = 25000;
-const MAX_RETRIES = 6;
+const REQUEST_TIMEOUT_MS = 20000;
+const MAX_RETRIES = 4;
 const RETRY_STATUSES = [502, 503, 504];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -106,8 +97,7 @@ async function fetchWithRetry(url, config) {
  * Будит уснувший сервер и не даёт ему заснуть.
  */
 export function startApiWarmup(intervalMs = 5 * 60 * 1000) {
-  const pingUrl = API_BASE_URL.endsWith('/api') ? `${API_BASE_URL}/health` : `${API_BASE_URL}/api/health`;
-  const ping = () => fetch(pingUrl, { cache: 'no-store' }).catch(() => {});
+  const ping = () => fetch(`${API_BASE_URL}/health`, { cache: 'no-store' }).catch(() => {});
   ping();
   const id = setInterval(() => { if (!document.hidden) ping(); }, intervalMs);
   return () => clearInterval(id);
@@ -155,19 +145,6 @@ async function request(endpoint, options = {}) {
     return response.blob();
   }
 
-  const contentType = response.headers.get('content-type') || '';
-  if (!contentType.includes('application/json')) {
-    const text = await response.text();
-    if (text.includes('<!DOCTYPE') || text.includes('<html')) {
-      throw new Error(`Сервер вернул HTML-страницу вместо JSON (${response.status}). Проверьте адрес VITE_API_URL.`);
-    }
-    try {
-      return JSON.parse(text);
-    } catch {
-      throw new Error(`Некорректный ответ сервера: ${text.slice(0, 120)}`);
-    }
-  }
-
   return response.json();
 }
 
@@ -201,7 +178,7 @@ export function normalizeOutage(raw) {
   }
 
   // Type normalization (electricity, water, gas)
-  let type;
+  let type = 'electricity';
   const rawType = (raw.type || raw.service || raw.category || '').toLowerCase();
   if (rawType.includes('water') || rawType.includes('сув') || rawType.includes('вод')) {
     type = 'water';
@@ -212,7 +189,7 @@ export function normalizeOutage(raw) {
   }
 
   // Status normalization (active, in_progress, resolved, planned)
-  let status;
+  let status = 'active';
   const rawStatus = (raw.status || '').toLowerCase();
   if (rawStatus === 'planned' || raw.isPlanned || rawStatus === 'план' || rawStatus === 'скоро работы') {
     status = 'planned';

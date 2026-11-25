@@ -29,6 +29,16 @@ export default function CabinetModal({ isOpen, onClose, user, onStatusChangeSucc
   const isAdmin = user?.role === 'admin' || user?.email === 'admin@netsveta.dev';
   const isOrg = isAdmin || user?.role === 'organization' || user?.email === 'org@netsveta.dev';
 
+  useEffect(() => {
+    if (isOpen) {
+      if (isAdmin && activeTab === 'org_dashboard') {
+        loadData('org_dashboard');
+      } else if (isOrg) {
+        loadData('org_dashboard');
+      }
+    }
+  }, [isOpen, activeTab]);
+
   const loadData = async (tab) => {
     setLoading(true);
     setError(null);
@@ -86,16 +96,6 @@ export default function CabinetModal({ isOpen, onClose, user, onStatusChangeSucc
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    if (isOpen) {
-      if (isAdmin && activeTab === 'org_dashboard') {
-        loadData('org_dashboard');
-      } else if (isOrg) {
-        loadData('org_dashboard');
-      }
-    }
-  }, [isOpen, activeTab, isAdmin, isOrg]);
 
   const handleExportCsv = async () => {
     try {
