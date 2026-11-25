@@ -73,6 +73,7 @@ export const updateOutage = wrap(async (req, res) => {
   if (status !== undefined) {
     if (!STATUSES.includes(status)) throw new AppError('Неверный статус');
     o.status = status;
+    o.isPlanned = status === 'planned';
     o.resolvedAt = status === 'resolved' ? (o.resolvedAt || new Date()) : null;
     if (status === 'resolved' && progress === undefined) {
       o.progress = 100;
@@ -127,6 +128,7 @@ export const setStatus = wrap(async (req, res) => {
   if (!o) throw new AppError('Авария не найдена', 404);
   if (!req.types.includes(o.type)) throw new AppError('Эта служба не обслуживает данный тип аварий', 403);
   o.status = status;
+  o.isPlanned = status === 'planned';
   o.resolvedAt = status === 'resolved' ? (o.resolvedAt || new Date()) : null;
   await o.save();
   emit(req, 'outage:updated', o);

@@ -189,14 +189,14 @@ export function normalizeOutage(raw) {
   }
 
   // Status normalization (active, in_progress, resolved, planned)
-  let status = 'active';
+  let status;
   const rawStatus = (raw.status || '').toLowerCase();
-  if (rawStatus === 'planned' || raw.isPlanned || rawStatus === 'план' || rawStatus === 'скоро работы') {
-    status = 'planned';
-  } else if (rawStatus === 'resolved' || rawStatus === 'fixed' || rawStatus === 'включено' || rawStatus === 'ликвидировано') {
+  if (rawStatus === 'resolved' || rawStatus === 'fixed' || rawStatus === 'включено' || rawStatus === 'ликвидировано') {
     status = 'resolved';
   } else if (rawStatus === 'confirmed' || rawStatus === 'in_progress' || rawStatus === 'progress' || rawStatus === 'в работе' || rawStatus === 'ремонт') {
     status = 'in_progress';
+  } else if (rawStatus === 'planned' || raw.isPlanned || rawStatus === 'план' || rawStatus === 'скоро работы') {
+    status = 'planned';
   } else {
     status = 'active';
   }
@@ -220,7 +220,7 @@ export function normalizeOutage(raw) {
     status,
     progress,
     processStage,
-    isPlanned: Boolean(raw.isPlanned || status === 'planned'),
+    isPlanned: status === 'planned',
     plannedStart: raw.plannedStart || (status === 'planned' ? 'Скоро начнутся' : ''),
     severity: raw.severity || (status === 'planned' ? 'medium' : 'high'),
     coordinates,
