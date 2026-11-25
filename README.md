@@ -90,14 +90,3 @@ VITE_API_URL=https://АДРЕС-ТВОЕГО-BACKEND/api
 - или PM2: `npm i -g pm2 && npm run pm2:start && pm2 startup`.
 
 Важно: на бесплатном тарифе Render сервис всё равно может иногда засыпать, если пинги не прошли. Гарантированный 24/7 даёт платный тариф или собственный VPS.
-
-## Быстрый старт (Windows / macOS / Linux)
-
-Если при `npm run dev` видите `Cannot find package 'dotenv'` или `Cannot find package '@vitejs/plugin-react'` — не установлены зависимости. Выполните в корне проекта:
-
-```bash
-npm install
-npm run install:all
-copy backend\.env.example backend\.env   # Windows (macOS/Linux: cp backend/.env.example backend/.env)
-npm run dev
-```
