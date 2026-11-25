@@ -37,6 +37,7 @@ const outageS = new Schema({
   affectedResidents: { type: Number, default: 100 },
   confirmations: { type: Number, default: 0 },
   phone: { type: String, default: '' },
+  resolvedAt: { type: Date, default: null },
   createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: false },
 }, { timestamps: true, ...J });
 outageS.index({ location: '2dsphere' });

@@ -80,10 +80,12 @@ export default function App() {
     return stopWarmup;
   }, [loadOutages]);
 
-  // Пока API офлайн — пробуем переподключиться каждые 15 секунд (сервер на free-хостинге просыпается ~1 мин)
+  // Пока API офлайн — пробуем переподключиться каждые 15 с; когда онлайн — обновляем список каждые 20 с (чтобы авто-удалённые «Завершено» исчезали сразу)
   useEffect(() => {
-    if (backendConnected) return undefined;
-    const id = setInterval(() => { loadOutages(); }, 15000);
+    const delay = backendConnected ? 20000 : 15000;
+    const id = setInterval(() => {
+      if (!backendConnected || !document.hidden) loadOutages();
+    }, delay);
     return () => clearInterval(id);
   }, [backendConnected, loadOutages]);
 

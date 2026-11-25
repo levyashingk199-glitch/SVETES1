@@ -46,6 +46,7 @@ export const create = wrap(async (req, res) => {
     affectedHouses: Number(req.body.affectedHouses) || 1,
     affectedResidents: Number(req.body.affectedResidents) || 100,
     phone,
+    resolvedAt: status === 'resolved' ? new Date() : null,
     createdBy: req.user?._id || null,
   });
   emit(req, 'outage:created', o);
@@ -72,6 +73,7 @@ export const updateOutage = wrap(async (req, res) => {
   if (status !== undefined) {
     if (!STATUSES.includes(status)) throw new AppError('Неверный статус');
     o.status = status;
+    o.resolvedAt = status === 'resolved' ? (o.resolvedAt || new Date()) : null;
     if (status === 'resolved' && progress === undefined) {
       o.progress = 100;
     }
@@ -124,7 +126,9 @@ export const setStatus = wrap(async (req, res) => {
   const o = await Outage.findById(req.params.id);
   if (!o) throw new AppError('Авария не найдена', 404);
   if (!req.types.includes(o.type)) throw new AppError('Эта служба не обслуживает данный тип аварий', 403);
-  o.status = status; await o.save();
+  o.status = status;
+  o.resolvedAt = status === 'resolved' ? (o.resolvedAt || new Date()) : null;
+  await o.save();
   emit(req, 'outage:updated', o);
   if (status === 'resolved') emit(req, 'outage:resolved', o);
   res.json(o);

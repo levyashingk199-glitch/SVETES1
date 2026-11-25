@@ -1,20 +1,17 @@
 import 'dotenv/config';
 import http from 'http';
-import express from 'express';
-import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import express from 'express';
+import cors from 'cors';
 import { Server } from 'socket.io';
 import { connectDB, closeDB, dbReady } from './config/db.js';
 import { initSocket } from './sockets/index.js';
 import { startKeepAlive } from './services/keepAlive.js';
+import { startResolvedCleanup } from './services/outages.js';
 import routes from './routes/index.js';
 import errorHandler from './middleware/error.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const frontendDist = path.resolve(__dirname, '../../frontend/dist');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -22,29 +19,27 @@ const PORT = process.env.PORT || 4000;
 // За прокси (Render, nginx, Docker) нужен реальный IP клиента — иначе rate-limit ломается
 app.set('trust proxy', 1);
 
-// Разрешаем запросы с любых доменов (API публичный, авторизация по Bearer-токену в заголовке),
-// чтобы у всех пользователей на любом домене/зеркале/браузере сайт работал одинаково.
+const allowedOrigins = process.env.CLIENT_URL
+  ? process.env.CLIENT_URL.split(',').map((s) => s.trim())
+  : true;
+
 const server = http.createServer(app);
 // Таймауты выше, чем у балансировщиков (Render ~ 60с) — иначе будут обрывы keep-alive соединений
 server.keepAliveTimeout = 65 * 1000;
 server.headersTimeout = 66 * 1000;
 
-const io = new Server(server, {
-  cors: {
-    origin: true,
-    credentials: true,
-  },
-});
+const io = new Server(server, { cors: { origin: allowedOrigins } });
 initSocket(io);
 app.set('io', io);
 
-app.use(cors({ origin: true, credentials: true }));
+// Разрешаем адреса из CLIENT_URL и любые деплои на *.vercel.app (в т.ч. preview)
+const corsOrigin = (origin, cb) => {
+  if (!origin || allowedOrigins === true) return cb(null, true);
+  if (allowedOrigins.includes(origin) || /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin)) return cb(null, true);
+  return cb(null, false);
+};
+app.use(cors({ origin: corsOrigin }));
 app.use(express.json({ limit: '50kb' }));
-
-// Раздача статики фронтенда (если фронтенд собран в frontend/dist для единого сервиса)
-if (fs.existsSync(frontendDist)) {
-  app.use(express.static(frontendDist));
-}
 
 // Health: всегда 200, пока жив процесс (иначе хостинг будет перезапускать сервис,
 // пока БД переподключается). Реальное состояние БД — в поле database.
@@ -54,21 +49,6 @@ app.get(['/api/health', '/health'], (req, res) => {
     message: 'WarnTech API is working!',
     database: dbReady() ? 'Connected' : 'Connecting',
     uptime: Math.round(process.uptime()),
-    time: new Date().toISOString(),
-  });
-});
-
-// Корневой адрес: если есть собранный фронтенд — отдаем index.html, иначе JSON-статус
-app.get('/', (req, res, next) => {
-  if (fs.existsSync(frontendDist)) {
-    return res.sendFile(path.join(frontendDist, 'index.html'));
-  }
-  res.status(200).json({
-    name: 'WarnTech API',
-    status: 'online',
-    health: '/api/health',
-    outages: '/api/outages',
-    database: dbReady() ? 'Connected' : 'Connecting',
     time: new Date().toISOString(),
   });
 });
@@ -86,11 +66,18 @@ app.use('/api', (req, res) => {
   res.status(404).json({ success: false, message: 'Маршрут не найден' });
 });
 
-// SPA fallback для роутов фронтенда (если фронтенд раздаётся бэкендом)
-if (fs.existsSync(frontendDist)) {
+// ── Фронтенд: если собран frontend/dist — отдаём его с этого же сервера ─────
+// Так сайт и API живут на одном адресе (один сервис на Render), CORS не нужен.
+const distDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../frontend/dist');
+if (fs.existsSync(path.join(distDir, 'index.html'))) {
+  app.use(express.static(distDir, { index: false, maxAge: '1h' }));
   app.get('*', (req, res) => {
-    res.sendFile(path.join(frontendDist, 'index.html'));
+    res.set('Cache-Control', 'no-cache');
+    res.sendFile(path.join(distDir, 'index.html'));
   });
+  console.log(`Frontend is served from ${distDir}`);
+} else {
+  console.log('frontend/dist not found — serving API only');
 }
 
 app.use(errorHandler);
@@ -100,6 +87,7 @@ server.listen(PORT, () => {
   console.log(`WarnTech API running on port ${PORT}`);
   console.log(`API health: http://localhost:${PORT}/api/health`);
   startKeepAlive();
+  startResolvedCleanup(io);
 });
 connectDB();
 

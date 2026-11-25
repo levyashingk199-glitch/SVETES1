@@ -1,4 +1,5 @@
-import { Outage } from '../models/index.js';
+import { Outage, Confirmation } from '../models/index.js';
+import { dbReady } from '../config/db.js';
 import { TYPES, STATUSES, esc } from '../utils/helpers.js';
 export const buildFilter = (q = {}, types = TYPES) => {
   const f = { type: { $in: types } };
@@ -12,4 +13,34 @@ export const summary = async types => {
   const s = { pending: 0, confirmed: 0, resolved: 0, confirmations: 0 };
   rows.forEach(r => { s[r._id] = r.n; s.confirmations += r.c; });
   return { ...s, total: s.pending + s.confirmed + s.resolved, active: s.pending + s.confirmed };
+};
+
+// Автоматически удаляем завершённые точки («Завершено» / resolved) через 90 секунд (1.5 минуты)
+export const startResolvedCleanup = (io, ttlMs = 90 * 1000, intervalMs = 15 * 1000) => {
+  const run = async () => {
+    if (!dbReady()) return;
+    try {
+      const cutoff = new Date(Date.now() - ttlMs);
+      const expired = await Outage.find({
+        status: 'resolved',
+        $or: [
+          { resolvedAt: { $lte: cutoff } },
+          { resolvedAt: null, updatedAt: { $lte: cutoff } },
+        ],
+      }).select('_id');
+      if (!expired.length) return;
+      const ids = expired.map((d) => d._id);
+      await Outage.deleteMany({ _id: { $in: ids } });
+      await Confirmation.deleteMany({ outage: { $in: ids } });
+      if (io) {
+        ids.forEach((id) => io.emit('outage:deleted', { id, _id: id }));
+      }
+      console.log(`[cleanup] Auto-deleted ${ids.length} resolved outage(s)`);
+    } catch (e) {
+      console.warn('[cleanup] error:', e.message);
+    }
+  };
+  const timer = setInterval(run, intervalMs);
+  timer.unref();
+  return () => clearInterval(timer);
 };
