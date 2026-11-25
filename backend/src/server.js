@@ -22,26 +22,8 @@ const PORT = process.env.PORT || 4000;
 // За прокси (Render, nginx, Docker) нужен реальный IP клиента — иначе rate-limit ломается
 app.set('trust proxy', 1);
 
-const allowedOrigins = process.env.CLIENT_URL
-  ? process.env.CLIENT_URL.split(',').map((s) => s.trim().replace(/\/+$/, ''))
-  : true;
-
-// Разрешаем адреса из CLIENT_URL, Render (*.onrender.com), Vercel (*.vercel.app) и localhost
-const corsOrigin = (origin, cb) => {
-  if (!origin || allowedOrigins === true) return cb(null, true);
-  const normalized = origin.replace(/\/+$/, '');
-  if (
-    (Array.isArray(allowedOrigins) && allowedOrigins.includes(normalized)) ||
-    /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(normalized) ||
-    /^https:\/\/[a-z0-9-]+\.onrender\.com$/i.test(normalized) ||
-    /^http:\/\/localhost(:\d+)?$/i.test(normalized) ||
-    /^http:\/\/127\.0\.0\.1(:\d+)?$/i.test(normalized)
-  ) {
-    return cb(null, true);
-  }
-  return cb(null, false);
-};
-
+// Разрешаем запросы с любых доменов (API публичный, авторизация по Bearer-токену в заголовке),
+// чтобы у всех пользователей на любом домене/зеркале/браузере сайт работал одинаково.
 const server = http.createServer(app);
 // Таймауты выше, чем у балансировщиков (Render ~ 60с) — иначе будут обрывы keep-alive соединений
 server.keepAliveTimeout = 65 * 1000;
@@ -49,14 +31,14 @@ server.headersTimeout = 66 * 1000;
 
 const io = new Server(server, {
   cors: {
-    origin: corsOrigin,
+    origin: true,
     credentials: true,
   },
 });
 initSocket(io);
 app.set('io', io);
 
-app.use(cors({ origin: corsOrigin, credentials: true }));
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '50kb' }));
 
 // Раздача статики фронтенда (если фронтенд собран в frontend/dist для единого сервиса)

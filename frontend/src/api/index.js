@@ -1,9 +1,15 @@
-// В dev: VITE_API_URL не задан → используем Vite proxy '/api'
-// В prod: VITE_API_URL = 'https://warntech-api.onrender.com/api' или 'https://warntech-api.onrender.com'
+// В dev (localhost): VITE_API_URL не задан → используем Vite proxy '/api'
+// В prod: если VITE_API_URL не задан и сайт не на самом бэкенде → используем 'https://warntech-api.onrender.com/api'
+const DEFAULT_PROD_API = 'https://warntech-api.onrender.com/api';
 const rawApiUrl = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
-const API_BASE_URL = rawApiUrl
-  ? (rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`)
-  : '/api';
+const host = typeof window !== 'undefined' ? window.location.hostname : '';
+const isLocalHost = ['localhost', '127.0.0.1'].includes(host);
+const isBackendHost = host === 'warntech-api.onrender.com';
+const pointsToLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(rawApiUrl);
+const effectiveRawUrl = (!isLocalHost && pointsToLocalhost) ? '' : rawApiUrl;
+const API_BASE_URL = effectiveRawUrl
+  ? (effectiveRawUrl.endsWith('/api') ? effectiveRawUrl : `${effectiveRawUrl}/api`)
+  : (isLocalHost || isBackendHost ? '/api' : DEFAULT_PROD_API);
 
 /**
  * Storage helpers for Bearer token and current user
@@ -58,8 +64,8 @@ export const setLocalIncidents = (points) => {
  * а БД может на несколько секунд отвечать 503 при переподключении.
  * Повторяем только безопасные запросы (GET/HEAD) и сетевые сбои/502/503/504.
  */
-const REQUEST_TIMEOUT_MS = 20000;
-const MAX_RETRIES = 4;
+const REQUEST_TIMEOUT_MS = 25000;
+const MAX_RETRIES = 6;
 const RETRY_STATUSES = [502, 503, 504];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
