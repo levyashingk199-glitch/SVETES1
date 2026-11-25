@@ -14,10 +14,10 @@ services:
         value: 10000
       - key: JWT_SECRET
         generateValue: true          # Render сгенерирует автоматически
-      - key: MONGO_URI
-        sync: false                  # Вставите вручную из MongoDB Atlas
       - key: CLIENT_URL
-        sync: false                  # Вставите URL фронтенда после деплоя
+        value: https://warntech-frontend.onrender.com
+      - key: MONGO_URI
+        sync: false
 
   # ── Frontend (Static Site) ─────────────────────────────────────────────────
   - type: web
@@ -36,4 +36,4 @@ services:
         destination: /index.html
     envVars:
       - key: VITE_API_URL
-        sync: false                  # Вставите https://warntech-api.onrender.com/api
+        value: https://warntech-api.onrender.com/api
