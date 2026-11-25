@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <defs>
+    <linearGradient id="shieldGrad" x1="6" y1="4" x2="42" y2="44" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2563eb" />
+      <stop offset="100%" stop-color="#1e3a8a" />
+    </linearGradient>
+    <linearGradient id="boltGrad" x1="16" y1="10" x2="32" y2="38" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="50%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#ea580c" />
+    </linearGradient>
+    <linearGradient id="glowGrad" x1="24" y1="12" x2="24" y2="36" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.5" />
+      <stop offset="100%" stop-color="#2563eb" stop-opacity="0" />
+    </linearGradient>
+    <filter id="shadow" x="0" y="2" width="48" height="46" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#1e3a8a" flood-opacity="0.25" />
+    </filter>
+  </defs>
+
+  <!-- Base Shield Badge -->
+  <g filter="url(#shadow)">
+    <path d="M24 3L8 9.5V21C8 31.8 14.8 41.8 24 45C33.2 41.8 40 31.8 40 21V9.5L24 3Z" fill="url(#shieldGrad)" />
+    <!-- Subtle Inner Border Highlight -->
+    <path d="M24 4.8L9.8 10.6V21C9.8 30.8 15.9 39.8 24 42.8C32.1 39.8 38.2 30.8 38.2 21V10.6L24 4.8Z" stroke="#60a5fa" stroke-width="1.2" stroke-opacity="0.4" />
+  </g>
+
+  <!-- Glowing Radar Circles (Monitoring) -->
+  <circle cx="24" cy="24" r="13" stroke="url(#glowGrad)" stroke-width="1.5" stroke-dasharray="3 3" />
+  <circle cx="24" cy="24" r="8" stroke="url(#glowGrad)" stroke-width="1" stroke-dasharray="2 2" />
+
+  <!-- Lightning Bolt for Power / Grid Infrastructure -->
+  <path d="M26.5 10L14.5 24.5H23L20 37L33.5 21.5H24.5L26.5 10Z" fill="url(#boltGrad)" />
+
+  <!-- Core White Reflection Spark -->
+  <path d="M24.8 14L18.2 23H23.5L21.8 30L29.5 21H24.2L24.8 14Z" fill="#ffffff" opacity="0.35" />
+
+  <!-- Ping dot on top right indicating live online status -->
+  <circle cx="37" cy="8" r="3.5" fill="#22c55e" stroke="#ffffff" stroke-width="1.5" />
+</svg>
