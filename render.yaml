@@ -1,0 +1,42 @@
+services:
+  # ── Backend (Node.js Web Service) ──────────────────────────────────────────
+  - type: web
+    name: warntech-api
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    plan: free
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: JWT_SECRET
+        generateValue: true          # Render сгенерирует автоматически
+      - key: MONGO_URI
+        sync: false                  # Вставите вручную из MongoDB Atlas
+      - key: CLIENT_URL
+        sync: false                  # Вставите URL фронтенда после деплоя
+
+  # ── Frontend (Static Site) ─────────────────────────────────────────────────
+  - type: web
+    name: warntech-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    plan: free
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: no-cache
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        sync: false                  # Вставите https://warntech-api.onrender.com/api
