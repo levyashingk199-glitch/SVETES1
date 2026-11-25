@@ -1,9 +1,28 @@
 import fs from 'fs';
 import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
 
 let mem;
 let connecting = false;
 let closing = false;
+
+const ensureDefaultAdmin = async () => {
+  try {
+    const User = mongoose.models.User;
+    if (!User) return;
+    if (!(await User.exists({ role: 'admin' }))) {
+      await User.create({
+        name: 'Администратор',
+        email: 'admin@netsveta.dev',
+        password: await bcrypt.hash('admin123', 10),
+        role: 'admin',
+      });
+      console.log('Default admin ensured: admin@netsveta.dev');
+    }
+  } catch (e) {
+    console.warn('Default admin check skipped:', e.message);
+  }
+};
 
 // Состояние БД для /api/health и middleware
 export const dbReady = () => mongoose.connection.readyState === 1;
@@ -13,10 +32,6 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const resolveUri = async () => {
   let uri = process.env.MONGO_URI;
   if (uri) return uri;
-  if (process.env.NODE_ENV === 'production') {
-    console.warn('⚠️  [WARN] Переменная MONGO_URI не задана!');
-    console.warn('⚠️  Для сохранения данных на Render укажите MONGO_URI (например, из бесплатного MongoDB Atlas).');
-  }
   // MONGO_URI пуст -> встроенная MongoDB, данные в ./data/db
   if (!mem) {
     const { MongoMemoryServer } = await import('mongodb-memory-server');
@@ -47,6 +62,7 @@ export const connectDB = async () => {
         maxPoolSize: 10,
       });
       console.log('MongoDB connected');
+      await ensureDefaultAdmin();
       break;
     } catch (err) {
       attempt += 1;

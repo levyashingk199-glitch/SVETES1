@@ -119,18 +119,34 @@ export default function AdminPanelModal({
     setTimeout(() => setActionNotice(null), 3500);
   };
 
-  const handleAdminLogin = (e) => {
+  const handleAdminLogin = async (e) => {
     e.preventDefault();
-    if (adminPassInput === 'admin123' || adminPassInput === 'admin' || adminPassInput === '') {
-      onLoginAsAdmin({
+    const pass = adminPassInput.trim() || 'admin123';
+    if (pass !== 'admin123' && pass !== 'admin') {
+      setAuthError('Неверный пароль администратора (по умолчанию: admin123)');
+      return;
+    }
+    try {
+      const res = await api.login('admin@netsveta.dev', 'admin123');
+      onLoginAsAdmin(res?.user || {
         email: 'admin@netsveta.dev',
         role: 'admin',
         name: 'Главный Администратор Ташкента',
       });
       setAuthError('');
       showNotice('Успешный вход в режим администратора!');
-    } else {
-      setAuthError('Неверный пароль администратора (по умолчанию: admin123)');
+    } catch (err) {
+      if (err.status === 0) {
+        onLoginAsAdmin({
+          email: 'admin@netsveta.dev',
+          role: 'admin',
+          name: 'Главный Администратор Ташкента',
+        });
+        setAuthError('');
+        showNotice('Вход выполнен в автономном режиме (сервер недоступен)');
+      } else {
+        setAuthError(err.message || 'Ошибка авторизации на сервере');
+      }
     }
   };
 

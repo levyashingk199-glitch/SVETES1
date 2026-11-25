@@ -67,11 +67,14 @@ export default function App() {
     const stopWarmup = startApiWarmup();
     loadOutages();
 
-    // Check token if present
+    // Check token if present; if admin/org was saved locally without a JWT token, clear stale session
     if (getToken()) {
       api.getMe()
         .then((u) => setUser(u))
         .catch(() => {});
+    } else if (user && ['admin', 'organization'].includes(user.role)) {
+      setUser(null);
+      setSavedUser(null);
     }
 
     return stopWarmup;
@@ -149,6 +152,9 @@ export default function App() {
     try {
       await api.deleteOutage(pointId);
     } catch (err) {
+      if (err.status === 401 || err.status === 403) {
+        throw err;
+      }
       console.warn('Backend delete failed, removing locally:', err.message);
     }
 
@@ -168,24 +174,32 @@ export default function App() {
 
   // Update Point Process (Изменять процесс точки)
   const handleUpdatePointProcess = async (pointId, { status, progress, processStage }) => {
-    let updatedData = { status, progress, processStage };
+    const patchPayload = {
+      status,
+      progress,
+      ...(processStage !== undefined ? { processStage } : {}),
+    };
+    let updatedData = { ...patchPayload };
     try {
-      const res = await api.updateOutage(pointId, { status, progress, processStage });
+      const res = await api.updateOutage(pointId, patchPayload);
       if (res) updatedData = { ...updatedData, ...res };
     } catch (err) {
+      if (err.status >= 400 && err.status < 500) {
+        throw err;
+      }
       console.warn('Backend update failed, updating locally:', err.message);
     }
 
     setIncidents((prev) => {
       const nextList = prev.map((i) =>
-        i.id === pointId || i._id === pointId ? { ...i, ...updatedData, status, progress, processStage } : i
+        i.id === pointId || i._id === pointId ? { ...i, ...updatedData, ...patchPayload } : i
       );
       setLocalIncidents(nextList);
       return nextList;
     });
 
     if (modalIncident && (modalIncident.id === pointId || modalIncident._id === pointId)) {
-      setModalIncident((prev) => ({ ...prev, ...updatedData, status, progress, processStage }));
+      setModalIncident((prev) => ({ ...prev, ...updatedData, ...patchPayload }));
     }
     return updatedData;
   };
