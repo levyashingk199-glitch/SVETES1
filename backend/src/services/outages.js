@@ -30,7 +30,7 @@ export const startResolvedCleanup = (io, ttlMs = 90 * 1000, intervalMs = 15 * 10
       }).select('_id');
       if (!expired.length) return;
       const ids = expired.map((d) => d._id);
-      await Outage.deleteMany({ _id: { $in: ids } });
+      await Outage.deleteMany({ _id: { $in: ids }, status: 'resolved' });
       await Confirmation.deleteMany({ outage: { $in: ids } });
       if (io) {
         ids.forEach((id) => io.emit('outage:deleted', { id, _id: id }));
