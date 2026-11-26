@@ -17,4 +17,4 @@ export const createOrg = wrap(async (req, res) => {
   if (!name?.trim() || !email?.trim() || !serviceTypes.length) throw new AppError('Укажите название, email и хотя бы одну службу');
   res.status(201).json(await Organization.create({ name: name.trim(), email, serviceTypes }));
 });
-export const stats = wrap(async (req, res) => res.json({ ...(await summary(TYPES)), users: await User.countDocuments(), organizations: await Organization.countDocuments() }));
+export const stats = wrap(async (req, res) => res.json({ ...(await summary(TYPES)), users: await User.countDocuments(), organizations: await Organization.countDocuments(), uptime: Math.round(process.uptime()) }));

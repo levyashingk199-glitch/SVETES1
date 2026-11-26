@@ -1,0 +1,43 @@
+# Полностью автономный запуск (VPS / домашний сервер): docker compose up -d --build
+# restart: unless-stopped — контейнеры поднимаются сами после сбоя и перезагрузки машины.
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      PORT: 4000
+      MONGO_URI: mongodb://mongo:27017/netsveta
+      JWT_SECRET: ${JWT_SECRET:?задайте JWT_SECRET в .env рядом с docker-compose.yml}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@netsveta.dev}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?задайте ADMIN_PASSWORD в .env рядом с docker-compose.yml}
+      CLIENT_URL: ${CLIENT_URL:-http://localhost:8080}
+    ports:
+      - "4000:4000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:4000/api}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  mongo-data:

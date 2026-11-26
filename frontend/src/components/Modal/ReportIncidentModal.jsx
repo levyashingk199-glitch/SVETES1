@@ -103,6 +103,11 @@ export default function ReportIncidentModal({ isOpen, onClose, onAddIncident }) 
     e.preventDefault();
     if (!address.trim() || !mahalla.trim() || isSubmitting) return;
 
+    if (!pickedCoords) {
+      setError('Выберите точное место отключения на карте');
+      return;
+    }
+
     if (!phoneOk) {
       setPhoneTouched(true);
       setError('Укажите корректный номер телефона: +998 XX XXX XX XX');
@@ -112,10 +117,7 @@ export default function ReportIncidentModal({ isOpen, onClose, onAddIncident }) 
     setError('');
     setIsSubmitting(true);
 
-    const coords = pickedCoords || [
-      41.3111 + (Math.random() - 0.5) * 0.05,
-      69.2797 + (Math.random() - 0.5) * 0.05,
-    ];
+    const coords = pickedCoords;
 
     try {
       // Точку на сервер отправляет onAddIncident (handleAddPoint в App.jsx),

@@ -5,10 +5,10 @@ export const INCIDENT_TYPES = {
 };
 
 export const INCIDENT_STATUSES = {
-  ACTIVE: 'active', // Нет света / воды / газа (авария)
-  IN_PROGRESS: 'in_progress', // Идут восстановительные работы
-  RESOLVED: 'resolved', // Подача восстановлена
-  PLANNED: 'planned', // Скоро работы / Плановые работы
+  ACTIVE: 'active',
+  IN_PROGRESS: 'in_progress',
+  RESOLVED: 'resolved',
+  PLANNED: 'planned',
 };
 
 export const TASHKENT_DISTRICTS = [
@@ -25,6 +25,3 @@ export const TASHKENT_DISTRICTS = [
   'Яшнабадский',
   'Бектемирский',
 ];
-
-// Без выдуманных данных: только реальные точки, которые ставят пользователи и администратор
-export const INITIAL_INCIDENTS = [];

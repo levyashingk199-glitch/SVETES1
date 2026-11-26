@@ -1,4 +1,6 @@
+
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
+
 import Navbar from './components/Navbar/Navbar';
 import StatsBanner from './components/Stats/StatsBanner';
 import IncidentMap from './components/Map/IncidentMap';
@@ -8,170 +10,250 @@ import ReportIncidentModal from './components/Modal/ReportIncidentModal';
 import AdminPanelModal from './components/Admin/AdminPanelModal';
 import AuthModal from './components/Modal/AuthModal';
 import CabinetModal from './components/Modal/CabinetModal';
-import { INCIDENT_TYPES, INCIDENT_STATUSES, TASHKENT_DISTRICTS } from './data/incidents';
-import { api, getSavedUser, setSavedUser, getToken } from './api';
+import { INCIDENT_STATUSES, TASHKENT_DISTRICTS } from './data/incidents';
+import {
+  api,
+  startApiWarmup,
+  getSavedUser,
+  setSavedUser,
+  getToken,
+  getLocalIncidents,
+  setLocalIncidents
+} from './api';
+
 import './App.css';
-import './responsive.css'; // ВАЖНО: после App.css
+import './responsive.css';
 
 const MOBILE_QUERY = '(max-width: 768px)';
+
 const isMobileNow = () =>
-  typeof window !== 'undefined' && window.matchMedia(MOBILE_QUERY).matches;
+  typeof window !== 'undefined' &&
+  window.matchMedia(MOBILE_QUERY).matches;
 
 export default function App() {
-  // Только реальные точки с сервера, без localStorage и моков
-  const [incidents, setIncidents] = useState([]);
+  const [incidents, setIncidents] = useState(() => getLocalIncidents());
   const [backendConnected, setBackendConnected] = useState(false);
+  const [apiError, setApiError] = useState('');
+  const [apiChecking, setApiChecking] = useState(true);
   const [user, setUser] = useState(() => getSavedUser());
 
-  // Modals state
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isCabinetModalOpen, setIsCabinetModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [modalIncident, setModalIncident] = useState(null);
   const [selectedIncident, setSelectedIncident] = useState(null);
-  // На телефоне сайдбар по умолчанию закрыт, чтобы сразу была видна карта
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => !isMobileNow());
 
-  // Map Location Picker State
   const [isSelectingLocation, setIsSelectingLocation] = useState(false);
   const [pickedCoordinates, setPickedCoordinates] = useState(null);
 
-  // Filters
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState('all'); // 'all', 'planned', 'electricity', 'water', 'gas'
-  const [selectedDistrict, setSelectedDistrict] = useState(TASHKENT_DISTRICTS[0]); // 'Все районы'
+  const [filterType, setFilterType] = useState('all');
+  const [selectedDistrict, setSelectedDistrict] = useState(TASHKENT_DISTRICTS[0]);
 
-  const isAdmin = user?.role === 'admin' || user?.email === 'admin@netsveta.dev';
+  const isAdmin =
+    user?.role === 'admin';
 
-  // Гарантируем viewport-тег, чтобы не проверять index.html вручную
   useEffect(() => {
-    let meta = document.querySelector('meta[name="viewport"]');
-    if (!meta) {
-      meta = document.createElement('meta');
-      meta.name = 'viewport';
-      document.head.appendChild(meta);
+    const meta = document.querySelector('meta[name="viewport"]');
+
+    if (meta) {
+      meta.content = 'width=device-width, initial-scale=1, viewport-fit=cover';
     }
-    meta.content = 'width=device-width, initial-scale=1, viewport-fit=cover';
   }, []);
 
-  // При переходе между мобильным и десктопным размером подстраиваем сайдбар
   useEffect(() => {
     const mq = window.matchMedia(MOBILE_QUERY);
-    const onChange = (e) => setIsSidebarOpen(!e.matches);
+    const onChange = (event) => setIsSidebarOpen(!event.matches);
+
     mq.addEventListener('change', onChange);
+
     return () => mq.removeEventListener('change', onChange);
   }, []);
 
-  // Загружаем точки ТОЛЬКО с сервера
   const loadOutages = useCallback(async () => {
     try {
-      const res = await api.getOutages();
-      const items = Array.isArray(res) ? res : (res?.outages || res?.data || res?.items);
-      if (Array.isArray(items)) {
-        setIncidents(items);
-        setBackendConnected(true);
-        return;
+      const response = await api.getOutages();
+      const items = Array.isArray(response)
+        ? response
+        : response?.outages || response?.data || response?.items;
+
+      if (!Array.isArray(items)) {
+        throw new Error('Сервер вернул неверный формат списка точек');
       }
-      console.warn('Неожиданный формат ответа getOutages:', res);
+
+      setIncidents(items);
+      setLocalIncidents(items);
+      setBackendConnected(true);
+      setApiError('');
     } catch (error) {
-      console.warn('Backend offline:', error.message);
+      console.warn('Backend is unavailable:', error.message);
+
+      setBackendConnected(false);
+      setApiError(
+        error.status
+          ? `HTTP ${error.status}: ${error.message}`
+          : error.cause?.message || error.message
+      );
+
+      setIncidents(getLocalIncidents());
+    } finally {
+      setApiChecking(false);
     }
-    setBackendConnected(false);
   }, []);
 
   useEffect(() => {
+    const stopWarmup = startApiWarmup();
+
     loadOutages();
 
-    // Check token if present
     if (getToken()) {
       api.getMe()
-        .then((u) => setUser(u))
-        .catch(() => {});
+        .then((loggedUser) => setUser(loggedUser))
+        .catch(() => {
+          api.logout();
+          setUser(null);
+        });
+    } else if (user) {
+      api.logout();
+      setUser(null);
     }
+
+    return stopWarmup;
   }, [loadOutages]);
 
-  // Filtered incidents
+  useEffect(() => {
+    const delay = backendConnected ? 20000 : 15000;
+
+    const id = setInterval(() => {
+      if (!backendConnected || !document.hidden) {
+        loadOutages();
+      }
+    }, delay);
+
+    return () => clearInterval(id);
+  }, [backendConnected, loadOutages]);
+
   const filteredIncidents = useMemo(() => {
-    return incidents.filter((inc) => {
-      // District Filter
-      if (selectedDistrict !== 'Все районы' && inc.district !== selectedDistrict) {
+    return incidents.filter((incident) => {
+      if (
+        selectedDistrict !== 'Все районы' &&
+        incident.district !== selectedDistrict
+      ) {
         return false;
       }
 
-      // Filter: Planned / Type
       if (filterType === 'planned') {
-        if (inc.status !== INCIDENT_STATUSES.PLANNED) return false;
-      } else if (filterType !== 'all' && inc.type !== filterType) {
+        if (incident.status !== INCIDENT_STATUSES.PLANNED) return false;
+      } else if (filterType !== 'all' && incident.type !== filterType) {
         return false;
       }
 
-      // Search Query
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const matchesAddress = inc.address?.toLowerCase().includes(q);
-        const matchesMahalla = inc.mahalla ? inc.mahalla.toLowerCase().includes(q) : false;
-        const matchesTitle = inc.title?.toLowerCase().includes(q);
-        const matchesDistrict = inc.district?.toLowerCase().includes(q);
+        const query = searchQuery.toLowerCase().trim();
 
-        if (!matchesAddress && !matchesMahalla && !matchesTitle && !matchesDistrict) {
+        const matchesAddress = incident.address?.toLowerCase().includes(query);
+        const matchesMahalla = incident.mahalla?.toLowerCase().includes(query);
+        const matchesTitle = incident.title?.toLowerCase().includes(query);
+        const matchesDistrict = incident.district?.toLowerCase().includes(query);
+
+        if (
+          !matchesAddress &&
+          !matchesMahalla &&
+          !matchesTitle &&
+          !matchesDistrict
+        ) {
           return false;
         }
       }
+
       return true;
     });
   }, [incidents, selectedDistrict, filterType, searchQuery]);
 
-  // Выбор точки: на телефоне закрываем список, чтобы показать карту
-  const handleSelectIncident = (inc) => {
-    setSelectedIncident(inc);
-    if (isMobileNow()) setIsSidebarOpen(false);
-  };
+  const handleSelectIncident = (incident) => {
+    setSelectedIncident(incident);
 
-  // Создание точки: только через сервер, без локальных копий
-  const handleAddPoint = async (pointData) => {
-    let savedPoint;
-    try {
-      savedPoint = await api.createOutage(pointData);
-    } catch (err) {
-      alert(err.message || 'Не удалось создать точку. Попробуйте позже');
-      throw err;
+    if (isMobileNow()) {
+      setIsSidebarOpen(false);
     }
-    setIncidents((prev) => [savedPoint, ...prev]);
-    handleSelectIncident(savedPoint);
-    return savedPoint;
   };
 
-  // Удаление точки
+  const handleAddPoint = async (pointData) => {
+    try {
+      const savedPoint = await api.createOutage(pointData);
+
+      setIncidents((previous) => {
+        const nextList = [savedPoint, ...previous];
+        setLocalIncidents(nextList);
+        return nextList;
+      });
+
+      handleSelectIncident(savedPoint);
+      return savedPoint;
+    } catch (error) {
+      alert(error.message || 'Не удалось создать точку на сервере');
+      throw error;
+    }
+  };
+
   const handleDeletePoint = async (pointId) => {
     try {
       await api.deleteOutage(pointId);
-    } catch (err) {
-      alert(err.message || 'Не удалось удалить точку');
+    } catch (error) {
+      alert(error.message || 'Не удалось удалить точку на сервере');
       return;
     }
-    setIncidents((prev) => prev.filter((i) => i.id !== pointId && i._id !== pointId));
-    if (modalIncident && (modalIncident.id === pointId || modalIncident._id === pointId)) setModalIncident(null);
-    if (selectedIncident && (selectedIncident.id === pointId || selectedIncident._id === pointId)) setSelectedIncident(null);
+
+    setIncidents((previous) => {
+      const nextList = previous.filter(
+        (incident) => incident.id !== pointId && incident._id !== pointId
+      );
+      setLocalIncidents(nextList);
+      return nextList;
+    });
+
+    if (modalIncident?.id === pointId || modalIncident?._id === pointId) {
+      setModalIncident(null);
+    }
+
+    if (selectedIncident?.id === pointId || selectedIncident?._id === pointId) {
+      setSelectedIncident(null);
+    }
   };
 
-  // Изменение процесса точки
-  const handleUpdatePointProcess = async (pointId, { status, progress, processStage }) => {
-    let updatedData = { status, progress, processStage };
-    try {
-      const res = await api.updateOutage(pointId, { status, progress, processStage });
-      if (res) updatedData = { ...updatedData, ...res };
-    } catch (err) {
-      alert(err.message || 'Не удалось обновить точку');
-      throw err;
+  const handleUpdatePointProcess = async (
+    pointId,
+    { status, progress, processStage }
+  ) => {
+    const patchPayload = {
+      status,
+      progress,
+      ...(processStage !== undefined ? { processStage } : {})
+    };
+
+    const response = await api.updateOutage(pointId, patchPayload);
+    const updatedData = { ...patchPayload, ...response };
+
+    setIncidents((previous) => {
+      const nextList = previous.map((incident) =>
+        incident.id === pointId || incident._id === pointId
+          ? { ...incident, ...updatedData }
+          : incident
+      );
+      setLocalIncidents(nextList);
+      return nextList;
+    });
+
+    if (modalIncident?.id === pointId || modalIncident?._id === pointId) {
+      setModalIncident((previous) => ({ ...previous, ...updatedData }));
     }
-    const isSame = (i) => i.id === pointId || i._id === pointId;
-    setIncidents((prev) => prev.map((i) => (isSame(i) ? { ...i, ...updatedData } : i)));
-    if (modalIncident && isSame(modalIncident)) setModalIncident((prev) => ({ ...prev, ...updatedData }));
+
     return updatedData;
   };
 
-  // User Authentication Handlers
   const handleLoginAsAdmin = (adminUser) => {
     setUser(adminUser);
     setSavedUser(adminUser);
@@ -185,22 +267,30 @@ export default function App() {
   const handleLogout = () => {
     api.logout();
     setUser(null);
+    setSavedUser(null);
   };
 
-  // Cabinet (org / admin): применяем смену статуса
   const handleStatusChangeSuccess = (updatedOutage) => {
-    setIncidents((prev) =>
-      prev.map((inc) =>
-        inc._id === updatedOutage._id || inc.id === updatedOutage.id ? { ...inc, ...updatedOutage } : inc
-      )
-    );
+    setIncidents((previous) => {
+      const nextList = previous.map((incident) =>
+        incident._id === updatedOutage._id ||
+        incident.id === updatedOutage.id
+          ? { ...incident, ...updatedOutage }
+          : incident
+      );
+
+      setLocalIncidents(nextList);
+      return nextList;
+    });
   };
 
-  // Location Picker Handlers
   const handleStartPickOnMap = () => {
     setIsAdminModalOpen(false);
     setIsSelectingLocation(true);
-    if (isMobileNow()) setIsSidebarOpen(false); // карта должна быть видна
+
+    if (isMobileNow()) {
+      setIsSidebarOpen(false);
+    }
   };
 
   const handleLocationSelected = ({ lat, lng }) => {
@@ -214,10 +304,18 @@ export default function App() {
     setIsAdminModalOpen(true);
   };
 
-  // Quick Open Admin Panel with focus on specific point
-  const handleOpenAdminWithPoint = (pt) => {
-    setSelectedIncident(pt);
+  const handleOpenAdminWithPoint = (point) => {
+    setSelectedIncident(point);
     setIsAdminModalOpen(true);
+  };
+
+  const handleConfirmOutage = async (id) => {
+    try {
+      await api.confirmOutage(id);
+      await loadOutages();
+    } catch (error) {
+      alert(error.message || 'Не удалось подтвердить заявку на сервере');
+    }
   };
 
   return (
@@ -231,15 +329,17 @@ export default function App() {
         isAdmin={isAdmin}
         onLogout={handleLogout}
         isApiOnline={backendConnected}
+        isApiChecking={apiChecking}
+        apiError={apiError}
         onRefreshApi={loadOutages}
         isSidebarOpen={isSidebarOpen}
-        onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
+        onToggleSidebar={() => setIsSidebarOpen((previous) => !previous)}
       />
 
       <StatsBanner
         incidents={incidents}
         activeTypeFilter={filterType}
-        onSelectTypeFilter={(t) => setFilterType(t)}
+        onSelectTypeFilter={setFilterType}
       />
 
       <main className="svetanet-main-layout">
@@ -248,21 +348,14 @@ export default function App() {
           allIncidents={incidents}
           selectedIncident={selectedIncident}
           onSelectIncident={handleSelectIncident}
-          onOpenDetails={(inc) => setModalIncident(inc)}
+          onOpenDetails={(incident) => setModalIncident(incident)}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           filterType={filterType}
           onFilterTypeChange={setFilterType}
           selectedDistrict={selectedDistrict}
           onSelectDistrict={setSelectedDistrict}
-          onConfirmOutage={async (id) => {
-            try {
-              await api.confirmOutage(id);
-              loadOutages();
-            } catch (err) {
-              alert(err.message || 'Не удалось подтвердить');
-            }
-          }}
+          onConfirmOutage={handleConfirmOutage}
           user={user}
           isAdmin={isAdmin}
           onDeletePoint={handleDeletePoint}
@@ -274,8 +367,8 @@ export default function App() {
           <IncidentMap
             incidents={filteredIncidents}
             selectedIncident={selectedIncident}
-            onSelectIncident={(inc) => setSelectedIncident(inc)}
-            onOpenDetails={(inc) => setModalIncident(inc)}
+            onSelectIncident={handleSelectIncident}
+            onOpenDetails={(incident) => setModalIncident(incident)}
             selectedDistrict={selectedDistrict}
             user={user}
             isAdmin={isAdmin}
@@ -288,26 +381,23 @@ export default function App() {
         </div>
       </main>
 
-      {/* Details Modal */}
       {modalIncident && (
         <IncidentModal
           incident={modalIncident}
           onClose={() => setModalIncident(null)}
-          onFocusOnMap={(inc) => setSelectedIncident(inc)}
+          onFocusOnMap={handleSelectIncident}
           isAdmin={isAdmin}
           onDeletePoint={handleDeletePoint}
           onUpdateProcess={handleUpdatePointProcess}
         />
       )}
 
-      {/* Citizen Report Modal */}
       <ReportIncidentModal
         isOpen={isReportModalOpen}
         onClose={() => setIsReportModalOpen(false)}
         onAddIncident={handleAddPoint}
       />
 
-      {/* Admin Panel Modal (Таблица мониторинга, поставить точку, удалить, изменить процесс) */}
       <AdminPanelModal
         isOpen={isAdminModalOpen}
         onClose={() => setIsAdminModalOpen(false)}
@@ -318,19 +408,17 @@ export default function App() {
         onAddPoint={handleAddPoint}
         onDeletePoint={handleDeletePoint}
         onUpdatePointProcess={handleUpdatePointProcess}
-        onFocusOnMap={(inc) => setSelectedIncident(inc)}
+        onFocusOnMap={handleSelectIncident}
         onStartPickOnMap={handleStartPickOnMap}
         pickedCoordinates={pickedCoordinates}
       />
 
-      {/* Auth Modal */}
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
         onAuthSuccess={handleAuthSuccess}
       />
 
-      {/* Cabinet Modal (org / admin) */}
       {user && (
         <CabinetModal
           isOpen={isCabinetModalOpen}

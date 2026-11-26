@@ -26,8 +26,8 @@ export default function CabinetModal({ isOpen, onClose, user, onStatusChangeSucc
   const [adminUsers, setAdminUsers] = useState([]);
   const [adminOrgs, setAdminOrgs] = useState([]);
 
-  const isAdmin = user?.role === 'admin' || user?.email === 'admin@netsveta.dev';
-  const isOrg = isAdmin || user?.role === 'organization' || user?.email === 'org@netsveta.dev';
+  const isAdmin = user?.role === 'admin';
+  const isOrg = isAdmin || user?.role === 'organization';
 
   useEffect(() => {
     if (isOpen) {
@@ -61,37 +61,12 @@ export default function CabinetModal({ isOpen, onClose, user, onStatusChangeSucc
       }
     } catch (err) {
       console.warn(`Error loading tab ${tab}:`, err);
-      setError(`Не удалось получить данные с эндпоинта (${err.message}). Сервер возможно не запущен.`);
-      // Mock fallback data for demo visualization
-      if (tab === 'org_dashboard') {
-        setDashboardData({
-          activeCount: 6,
-          inProgressCount: 3,
-          resolvedToday: 14,
-          affectedResidentsTotal: 18400,
-          orgName: 'Тошкент шахар электр тармоклари (РЭС)',
-        });
-      } else if (tab === 'admin_stats') {
-        setAdminStats({
-          totalUsers: 48,
-          totalOrganizations: 6,
-          totalReportsRecorded: 284,
-          systemUptime: '99.8%',
-        });
-      } else if (tab === 'admin_users') {
-        setAdminUsers([
-          { _id: 'u1', email: 'admin@netsveta.dev', role: 'admin', name: 'Главный Администратор' },
-          { _id: 'u2', email: 'org@netsveta.dev', role: 'organization', name: 'Диспетчер РЭС' },
-          { _id: 'u3', email: 'resident@tashkent.uz', role: 'user', name: 'Житель Чиланзара' },
-        ]);
-      } else if (tab === 'admin_orgs') {
-        setAdminOrgs([
-          { _id: 'o1', name: 'АО «Тошкент шахар электр тармоклари»', service: 'Электроэнергия', phone: '1154' },
-          { _id: 'o2', name: 'ООО «Тошкент шахар сув таъминоти»', service: 'Водоснабжение', phone: '1055' },
-          { _id: 'o3', name: 'Филиал «Худудгаз Пойтахт»', service: 'Газоснабжение', phone: '104' },
-          { _id: 'o4', name: 'ИП ООО «Veolia Energy Tashkent»', service: 'Теплоснабжение', phone: '200-00-56' },
-        ]);
-      }
+      setError(`Не удалось загрузить данные: ${err.message}`);
+      if (tab === 'org_dashboard') setDashboardData(null);
+      if (tab === 'org_outages') setOrgOutages([]);
+      if (tab === 'admin_stats') setAdminStats(null);
+      if (tab === 'admin_users') setAdminUsers([]);
+      if (tab === 'admin_orgs') setAdminOrgs([]);
     } finally {
       setLoading(false);
     }
@@ -206,22 +181,22 @@ export default function CabinetModal({ isOpen, onClose, user, onStatusChangeSucc
                   <div className="cab-stat-cards-grid">
                     <div className="cab-kpi-card">
                       <span className="kpi-title">Активные аварии</span>
-                      <span className="kpi-val text-red">{dashboardData.activeCount ?? 6}</span>
+                      <span className="kpi-val text-red">{dashboardData.activeCount ?? 0}</span>
                       <span className="kpi-sub">требуют устранения</span>
                     </div>
                     <div className="cab-kpi-card">
                       <span className="kpi-title">В процессе ремонта</span>
-                      <span className="kpi-val text-amber">{dashboardData.inProgressCount ?? 3}</span>
+                      <span className="kpi-val text-amber">{dashboardData.inProgressCount ?? 0}</span>
                       <span className="kpi-sub">бригады на выезде</span>
                     </div>
                     <div className="cab-kpi-card">
                       <span className="kpi-title">Ликвидировано сегодня</span>
-                      <span className="kpi-val text-green">{dashboardData.resolvedToday ?? 14}</span>
+                      <span className="kpi-val text-green">{dashboardData.resolvedToday ?? 0}</span>
                       <span className="kpi-sub">подача восстановлена</span>
                     </div>
                     <div className="cab-kpi-card">
                       <span className="kpi-title">Охват жителей</span>
-                      <span className="kpi-val">{dashboardData.affectedResidentsTotal?.toLocaleString('ru-RU') ?? '18,400'}</span>
+                      <span className="kpi-val">{(dashboardData.affectedResidentsTotal ?? 0).toLocaleString('ru-RU')}</span>
                       <span className="kpi-sub">в зоне ответственности</span>
                     </div>
                   </div>
@@ -298,19 +273,19 @@ export default function CabinetModal({ isOpen, onClose, user, onStatusChangeSucc
                   <div className="cab-stat-cards-grid">
                     <div className="cab-kpi-card">
                       <span className="kpi-title">Всего пользователей</span>
-                      <span className="kpi-val">{adminStats.totalUsers ?? 48}</span>
+                      <span className="kpi-val">{adminStats.users ?? 0}</span>
                     </div>
                     <div className="cab-kpi-card">
                       <span className="kpi-title">Организаций ЖКХ</span>
-                      <span className="kpi-val">{adminStats.totalOrganizations ?? 6}</span>
+                      <span className="kpi-val">{adminStats.organizations ?? 0}</span>
                     </div>
                     <div className="cab-kpi-card">
                       <span className="kpi-title">Сообщений от граждан</span>
-                      <span className="kpi-val text-blue">{adminStats.totalReportsRecorded ?? 284}</span>
+                      <span className="kpi-val text-blue">{adminStats.total ?? 0}</span>
                     </div>
                     <div className="cab-kpi-card">
                       <span className="kpi-title">Аптайм платформы</span>
-                      <span className="kpi-val text-green">{adminStats.systemUptime ?? '99.8%'}</span>
+                      <span className="kpi-val text-green">{`${Math.floor((adminStats.uptime || 0) / 3600)} ч`}</span>
                     </div>
                   </div>
                 </div>
@@ -352,8 +327,8 @@ export default function CabinetModal({ isOpen, onClose, user, onStatusChangeSucc
                     <thead>
                       <tr>
                         <th>Служба</th>
-                        <th>Профиль</th>
-                        <th>Телефон</th>
+                        <th>Email</th>
+                        <th>Виды услуг</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -362,10 +337,8 @@ export default function CabinetModal({ isOpen, onClose, user, onStatusChangeSucc
                           <td>
                             <strong>{org.name}</strong>
                           </td>
-                          <td>{org.service}</td>
-                          <td>
-                            <strong>{org.phone}</strong>
-                          </td>
+                          <td>{org.email}</td>
+                          <td>{(org.serviceTypes || []).join(', ') || '—'}</td>
                         </tr>
                       ))}
                     </tbody>

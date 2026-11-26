@@ -9,11 +9,14 @@ export default function Navbar({
   isAdmin,
   onLogout,
   isApiOnline,
+  isApiChecking,
+  apiError,
+  onOpenCabinetModal,
   onRefreshApi,
   isSidebarOpen,
   onToggleSidebar,
 }) {
-  const isOrg = isAdmin || user?.role === 'organization' || user?.email === 'org@netsveta.dev';
+  const isOrg = isAdmin || user?.role === 'organization';
 
   return (
     <header className="svetanet-header">
@@ -40,13 +43,14 @@ export default function Navbar({
 
         {/* API Status Indicator */}
         <div
-          className={`api-status-badge ${isApiOnline ? 'api-online' : 'api-offline'}`}
-          title={isApiOnline ? 'Подключено к backend API' : 'Автономный режим работы'}
+          data-nosnippet
+          className={`api-status-badge ${isApiOnline ? 'api-online' : isApiChecking ? 'api-checking' : 'api-offline'}`}
+          title={isApiOnline ? 'Подключено к backend API' : isApiChecking ? 'Подключение к серверу…' : `Нет связи с сервером: ${apiError || 'проверьте подключение'}`}
           onClick={onRefreshApi}
         >
           <span className="api-dot"></span>
           <span className="api-text">
-            {isApiOnline ? 'API Онлайн' : 'Офлайн'}
+            {isApiOnline ? 'API Онлайн' : isApiChecking ? 'Подключение…' : 'Нет связи'}
           </span>
           <RefreshCw size={12} className="api-refresh-icon" />
         </div>
@@ -80,8 +84,8 @@ export default function Navbar({
           <div className="user-profile-controls">
             <button
               className="user-cabinet-btn"
-              onClick={isAdmin ? onOpenAdminModal : undefined}
-              title={isAdmin ? 'Открыть админ-панель' : 'Профиль пользователя'}
+              onClick={isOrg ? onOpenCabinetModal : undefined}
+              title={isAdmin ? 'Открыть кабинет администратора' : isOrg ? 'Открыть кабинет службы' : 'Профиль пользователя'}
             >
               {isAdmin ? (
                 <Shield size={14} className="text-red" />

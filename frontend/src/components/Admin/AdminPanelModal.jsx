@@ -63,6 +63,7 @@ export default function AdminPanelModal({
 }) {
   // Tabs: 'table_monitor' (Таблица всех точек), 'create_point' (Поставить точку), 'system_stats' (Экспорт/статистика)
   const [activeTab, setActiveTab] = useState('table_monitor');
+  const [adminEmailInput, setAdminEmailInput] = useState('admin@netsveta.dev');
   const [adminPassInput, setAdminPassInput] = useState('');
   const [authError, setAuthError] = useState('');
   const [actionNotice, setActionNotice] = useState(null);
@@ -99,7 +100,7 @@ export default function AdminPanelModal({
   const [formResidents, setFormResidents] = useState(3800);
   const [formSubmitting, setFormSubmitting] = useState(false);
 
-  const isAdmin = user?.role === 'admin' || user?.email === 'admin@netsveta.dev';
+  const isAdmin = user?.role === 'admin';
 
   // Sync picked coordinates from map
   useEffect(() => {
@@ -119,18 +120,27 @@ export default function AdminPanelModal({
     setTimeout(() => setActionNotice(null), 3500);
   };
 
-  const handleAdminLogin = (e) => {
+  const handleAdminLogin = async (e) => {
     e.preventDefault();
-    if (adminPassInput === 'admin123' || adminPassInput === 'admin' || adminPassInput === '') {
-      onLoginAsAdmin({
-        email: 'admin@netsveta.dev',
-        role: 'admin',
-        name: 'Главный Администратор Ташкента',
-      });
+
+    const password = adminPassInput.trim();
+    if (!password) {
+      setAuthError('Введите пароль администратора');
+      return;
+    }
+
+    try {
+      const result = await api.login(adminEmailInput.trim(), password);
+      if (result.user?.role !== 'admin') {
+        api.logout();
+        throw new Error('У этой учётной записи нет прав администратора');
+      }
+
+      onLoginAsAdmin(result.user);
       setAuthError('');
-      showNotice('Успешный вход в режим администратора!');
-    } else {
-      setAuthError('Неверный пароль администратора (по умолчанию: admin123)');
+      showNotice('Вход администратора выполнен');
+    } catch (error) {
+      setAuthError(error.message || 'Не удалось войти в административную панель');
     }
   };
 
@@ -368,13 +378,25 @@ export default function AdminPanelModal({
 
               <form onSubmit={handleAdminLogin} className="gate-form">
                 <div className="form-group">
+                  <label>Email администратора:</label>
+                  <input
+                    type="email"
+                    className="admin-input"
+                    placeholder="admin@netsveta.dev"
+                    value={adminEmailInput}
+                    onChange={(e) => setAdminEmailInput(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
                   <label>Пароль администратора:</label>
                   <input
                     type="password"
                     className="admin-input"
-                    placeholder="Введите пароль (по умолчанию admin123)"
+                    placeholder="Введите пароль администратора"
                     value={adminPassInput}
                     onChange={(e) => setAdminPassInput(e.target.value)}
+                    required
                   />
                 </div>
 

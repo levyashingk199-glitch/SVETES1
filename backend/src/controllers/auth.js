@@ -7,6 +7,8 @@ const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const register = wrap(async (req, res) => {
   const name = String(req.body.name || '').trim(), email = String(req.body.email || '').toLowerCase(), password = String(req.body.password || '');
   if (!name || !emailRe.test(email) || password.length < 6) throw new AppError('Проверьте имя, email и пароль (минимум 6 символов)');
+  const reservedAdminEmail = String(process.env.ADMIN_EMAIL || 'admin@netsveta.dev').trim().toLowerCase();
+  if (email === reservedAdminEmail) throw new AppError('Этот email зарезервирован для администратора', 403);
   if (await User.exists({ email })) throw new AppError('Этот email уже зарегистрирован', 409);
   const user = await User.create({ name, email, password: await bcrypt.hash(password, 10) }); // role is always "user"
   res.status(201).json({ token: sign(user), user });

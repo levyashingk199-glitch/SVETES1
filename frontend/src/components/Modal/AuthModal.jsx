@@ -13,9 +13,9 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
 
   if (!isOpen) return null;
 
-  const handleQuickLogin = (demoEmail, demoPass = 'password123') => {
+  const handleQuickLogin = (demoEmail) => {
     setEmail(demoEmail);
-    setPassword(demoPass);
+    setPassword('');
     setError(null);
   };
 
@@ -43,19 +43,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
       }
     } catch (err) {
       console.warn('Auth error:', err);
-      // If server is not responding, give user friendly offline test mode fallback
-      if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError') || err.status === 0) {
-        const fallbackRole = email.includes('admin') ? 'admin' : email.includes('org') ? 'organization' : 'user';
-        const mockUser = { email, role: fallbackRole, name: name || email.split('@')[0] };
-        api.login(email, password).catch(() => {}); // silent
-        setSuccessMsg(`Сервер офлайн: выполнен вход в режиме симуляции (${mockUser.role})`);
-        setTimeout(() => {
-          onAuthSuccess(mockUser, 'demo-offline-token');
-          onClose();
-        }, 1000);
-      } else {
-        setError(err.message || 'Ошибка авторизации. Проверьте данные.');
-      }
+      setError(err.message || 'Ошибка авторизации. Проверьте данные и подключение к серверу.');
     } finally {
       setLoading(false);
     }
@@ -79,7 +67,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
         <div className="modal-scroll-body">
           {/* Quick presets for test accounts */}
           <div className="quick-roles-presets">
-            <span className="preset-label">Быстрый выбор тестовой роли:</span>
+            <span className="preset-label">Быстрый ввод email:</span>
             <div className="presets-btns">
               <button
                 type="button"
@@ -87,7 +75,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
                 onClick={() => handleQuickLogin('org@netsveta.dev')}
               >
                 <Building2 size={13} />
-                <span>org@netsveta.dev (Организация)</span>
+                <span>Подставить email службы</span>
               </button>
               <button
                 type="button"
@@ -95,7 +83,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
                 onClick={() => handleQuickLogin('admin@netsveta.dev')}
               >
                 <Shield size={13} />
-                <span>admin@netsveta.dev (Админ)</span>
+                <span>Подставить email администратора</span>
               </button>
             </div>
           </div>

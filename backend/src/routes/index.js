@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { protect, optionalAuth, role, orgScope } from '../middleware/auth.js';
 import * as A from '../controllers/auth.js';
 import * as O from '../controllers/outages.js';
@@ -7,7 +7,7 @@ import * as G from '../controllers/organizations.js';
 import * as D from '../controllers/admin.js';
 
 // Кулдаун на создание точек: 1 в минуту и не больше 10 в час (админ без лимита)
-const keyFn = (req) => (req.user ? String(req.user._id) : req.ip);
+const keyFn = (req) => (req.user ? `user:${req.user._id}` : `ip:${ipKeyGenerator(req.ip)}`);
 const skipAdmin = (req) => ['admin', 'organization'].includes(req.user?.role);
 const msg = { message: 'Слишком часто. Подождите минуту перед следующей точкой' };
 const createBurst = rateLimit({ windowMs: 60 * 1000, max: 1, keyGenerator: keyFn, skip: skipAdmin, skipFailedRequests: true, requestWasSuccessful: (req, res) => res.statusCode < 400 || res.statusCode === 429, message: msg });

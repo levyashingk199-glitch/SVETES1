@@ -1,6 +1,6 @@
 // В dev: VITE_API_URL не задан → используем Vite proxy '/api'
 // В prod: VITE_API_URL = 'https://warntech-api.onrender.com/api'
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+const API_BASE_URL = (import.meta.env.VITE_API_URL || '/api').replace(/\/+$/, '');
 
 /**
  * Storage helpers for Bearer token and current user
@@ -49,6 +49,65 @@ export const setLocalIncidents = (points) => {
 };
 
 /**
+ * Устойчивый fetch: таймаут и повторы только для безопасных GET/HEAD-запросов.
+ * POST/PATCH/DELETE не повторяются автоматически, чтобы не создавать дубликаты.
+ */
+const REQUEST_TIMEOUT_MS = 20000;
+const MAX_RETRIES = 4;
+const RETRY_STATUSES = [502, 503, 504];
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function fetchWithRetry(url, config) {
+  const method = (config.method || 'GET').toUpperCase();
+  const canRetry = method === 'GET' || method === 'HEAD';
+  const retries = canRetry ? MAX_RETRIES : 0;
+  let lastError;
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(url, { ...config, signal: controller.signal });
+
+      if (canRetry && RETRY_STATUSES.includes(response.status) && attempt < retries) {
+        clearTimeout(timer);
+        await sleep(Math.min(1500 * 2 ** attempt, 10000));
+        continue;
+      }
+
+      clearTimeout(timer);
+      return response;
+    } catch (error) {
+      clearTimeout(timer);
+      lastError = error;
+
+      if (attempt < retries) {
+        await sleep(Math.min(1500 * 2 ** attempt, 10000));
+        continue;
+      }
+    }
+  }
+
+  const error = new Error('Сервер недоступен. Проверьте подключение и попробуйте снова.');
+  error.status = 0;
+  error.cause = lastError;
+  throw error;
+}
+
+/**
+ * Прогрев API при загрузке страницы и периодический ping, пока вкладка открыта.
+ */
+export function startApiWarmup(intervalMs = 5 * 60 * 1000) {
+  const ping = () => fetch(`${API_BASE_URL}/health`, { cache: 'no-store' }).catch(() => {});
+  ping();
+  const id = setInterval(() => {
+    if (!document.hidden) ping();
+  }, intervalMs);
+  return () => clearInterval(id);
+}
+
+/**
  * Generic request helper with automatic Authorization header
  */
 async function request(endpoint, options = {}) {
@@ -69,7 +128,7 @@ async function request(endpoint, options = {}) {
     headers,
   };
 
-  const response = await fetch(url, config);
+  const response = await fetchWithRetry(url, config);
 
   if (!response.ok) {
     let errorData = {};
@@ -100,7 +159,8 @@ export function normalizeOutage(raw) {
   if (!raw) return null;
 
   // Handle _id or id
-  const id = raw._id || raw.id || `inc-${Math.random().toString(36).substr(2, 9)}`;
+  const id = raw._id || raw.id;
+  if (!id) throw new Error('Сервер вернул точку без идентификатора');
 
   // Handle coordinates (supports [lat, lng], [lng, lat], {lat, lng}, or location object)
   let coordinates = [41.3111, 69.2797];
@@ -136,14 +196,13 @@ export function normalizeOutage(raw) {
   // Status normalization (active, in_progress, resolved, planned)
   let status = 'active';
   const rawStatus = (raw.status || '').toLowerCase();
-  if (rawStatus === 'planned' || raw.isPlanned || rawStatus === 'план' || rawStatus === 'скоро работы') {
-    status = 'planned';
-  } else if (rawStatus === 'resolved' || rawStatus === 'fixed' || rawStatus === 'включено' || rawStatus === 'ликвидировано') {
+
+  if (rawStatus === 'resolved' || rawStatus === 'fixed' || rawStatus === 'включено' || rawStatus === 'ликвидировано') {
     status = 'resolved';
   } else if (rawStatus === 'confirmed' || rawStatus === 'in_progress' || rawStatus === 'progress' || rawStatus === 'в работе' || rawStatus === 'ремонт') {
     status = 'in_progress';
-  } else {
-    status = 'active';
+  } else if (rawStatus === 'planned' || raw.isPlanned || rawStatus === 'план' || rawStatus === 'скоро работы') {
+    status = 'planned';
   }
 
   const progress = typeof raw.progress === 'number'
@@ -165,7 +224,7 @@ export function normalizeOutage(raw) {
     status,
     progress,
     processStage,
-    isPlanned: Boolean(raw.isPlanned || status === 'planned'),
+    isPlanned: status === 'planned',
     plannedStart: raw.plannedStart || (status === 'planned' ? 'Скоро начнутся' : ''),
     severity: raw.severity || (status === 'planned' ? 'medium' : 'high'),
     coordinates,
@@ -173,10 +232,10 @@ export function normalizeOutage(raw) {
     mahalla: raw.mahalla || raw.district || 'Махалля города Ташкент',
     address: raw.address || 'Адрес уточняется',
     description: raw.description || 'Аварийное или плановое отключение коммунальных услуг.',
-    reportedAt: raw.reportedAt || (raw.createdAt ? new Date(raw.createdAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) : '2026-11-24 11:00'),
-    estimatedResolution: raw.estimatedResolution || (status === 'planned' ? 'Уточняется графиком работ' : 'Сегодня к 18:00'),
-    affectedHouses: raw.affectedHouses || raw.housesCount || 1,
-    affectedResidents: raw.affectedResidents || raw.residentsCount || 120,
+    reportedAt: raw.reportedAt || (raw.createdAt ? new Date(raw.createdAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) : 'Время не указано'),
+    estimatedResolution: raw.estimatedResolution || 'Уточняется',
+    affectedHouses: raw.affectedHouses ?? raw.housesCount ?? 0,
+    affectedResidents: raw.affectedResidents ?? raw.residentsCount ?? 0,
     reportsCount: raw.confirmationsCount || raw.reportsCount || raw.confirmations?.length || 0,
     isConfirmedByCommunity: Boolean(raw.isConfirmed || (raw.confirmationsCount && raw.confirmationsCount > 3)),
     serviceTeam: raw.serviceTeam || raw.organization?.name || (type === 'electricity' ? 'РЭС Ташкента (1154)' : type === 'water' ? 'Тошкент шахар сув таъминоти (1055)' : 'Худудгаз Пойтахт (104)'),
@@ -279,12 +338,14 @@ export const api = {
       body: JSON.stringify({ email, password }),
     });
     const token = res.token || res.data?.token || res.accessToken;
-    const user = res.user || res.data?.user || { email, role: email.includes('admin') ? 'admin' : email.includes('org') ? 'organization' : 'user' };
+    const user = res.user || res.data?.user;
 
-    if (token) {
-      setToken(token);
-      setSavedUser(user);
+    if (!token || !user) {
+      throw new Error('Сервер не вернул данные авторизации');
     }
+
+    setToken(token);
+    setSavedUser(user);
     return { token, user };
   },
 
@@ -296,10 +357,13 @@ export const api = {
     });
     const token = res.token || res.data?.token || res.accessToken;
     const user = res.user || res.data?.user;
-    if (token) {
-      setToken(token);
-      setSavedUser(user);
+
+    if (!token || !user) {
+      throw new Error('Сервер не вернул данные регистрации');
     }
+
+    setToken(token);
+    setSavedUser(user);
     return { token, user };
   },
 
