@@ -1,0 +1,141 @@
+/* ==========================================================================
+   WARNTECH — MOBILE RESPONSIVE
+   Подключается ПОСЛЕ App.css (import './responsive.css'), чтобы перебивать
+   админские стили, которые в App.css идут в самом конце.
+   ========================================================================== */
+
+/* Переменные, которые используются в админке, но не были объявлены */
+:root {
+  --border-color: var(--border);
+  --text-sub: var(--text-secondary);
+  --text-main: var(--text-primary);
+}
+
+/* dvh: на телефонах 100vh включает адресную строку и обрезает низ */
+.svetanet-app { height: 100vh; height: 100dvh; }
+.svetanet-modal,
+.report-modal-new,
+.admin-panel-modal { max-height: 92vh; max-height: 92dvh; }
+.admin-workspace { height: calc(88vh - 80px); height: calc(88dvh - 80px); }
+
+/* Страховка от горизонтального скролла */
+html, body, #root { max-width: 100%; overflow-x: hidden; }
+
+/* ---------- Планшет ---------- */
+@media (max-width: 900px) {
+  .hotlines-bar { display: none; }
+  .svetanet-sidebar { width: 340px; }
+  .fields-grid-4,
+  .admin-stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .admin-panel-modal { width: 96%; }
+}
+
+/* ---------- Телефон ---------- */
+@media (max-width: 768px) {
+  /* Шапка */
+  .svetanet-header { padding: 0 .75rem; }
+  .header-left, .header-right { gap: .4rem; min-width: 0; }
+  .brand-desc, .brand-tag,
+  .user-email-text, .user-role-badge,
+  .api-refresh-icon { display: none; }
+  .brand-name { font-size: 1rem; }
+  .brand-logo { width: 32px; height: 32px; }
+  .api-status-badge { padding: .3rem .5rem; }
+  .btn-report-outage,
+  .btn-admin-panel,
+  .btn-auth-login,
+  .user-cabinet-btn { padding: .4rem .6rem; font-size: .76rem; }
+  .mobile-menu-btn { display: flex; flex-shrink: 0; }
+
+  /* Полоса статистики */
+  .svetanet-stats-bar { padding: .4rem .75rem; scrollbar-width: none; }
+  .svetanet-stats-bar::-webkit-scrollbar { display: none; }
+
+  /* Сайдбар как выезжающая панель поверх карты */
+  .svetanet-sidebar {
+    position: absolute; top: 0; bottom: 0; left: 0;
+    width: 100%;
+    transform: translateX(-100%);
+    box-shadow: 4px 0 24px rgba(0,0,0,.12);
+    z-index: 900;
+  }
+  .svetanet-sidebar.is-open,
+  .svetanet-app.sidebar-open .svetanet-sidebar { transform: translateX(0); }
+
+  /* Карта */
+  .svetanet-map-legend { bottom: 12px; left: 8px; padding: .45rem .6rem; }
+  .legend-row { font-size: .68rem; }
+  .leaflet-popup-content-wrapper { max-width: 78vw; }
+  .leaflet-popup-content { max-width: 70vw; }
+  .location-picker-toast {
+    width: calc(100% - 16px); top: 8px;
+    flex-wrap: wrap; gap: .6rem; padding: .6rem .8rem;
+  }
+  .toast-content p { display: none; }
+
+  /* Модалки */
+  .modal-backdrop { padding: .5rem; align-items: flex-end; }
+  .svetanet-modal, .report-modal-new, .admin-panel-modal, .cabinet-modal {
+    width: 100%; max-width: 100%;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
+  .modal-scroll-body { padding: 1rem; }
+  .rmod-section { padding: .85rem 1rem; }
+  .rmod-type-grid { grid-template-columns: repeat(3, 1fr); gap: .35rem; }
+  .rmod-map { height: 180px; }
+  .stats-row-grid,
+  .cab-stat-cards-grid { grid-template-columns: repeat(2, 1fr); }
+  .service-contacts-card { flex-direction: column; align-items: flex-start; gap: .6rem; }
+  .call-btn { width: 100%; justify-content: center; }
+  .info-row { flex-direction: column; align-items: flex-start; }
+  .feedback-form { flex-direction: column; }
+
+  /* Админ-панель */
+  .admin-header-top { flex-wrap: wrap; gap: .5rem; }
+  .admin-tab-content { padding: .8rem; }
+  .admin-tabs-nav {
+    padding: .6rem .8rem; flex-wrap: nowrap; overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .admin-tabs-nav::-webkit-scrollbar { display: none; }
+  .admin-tab-btn { padding: .45rem .65rem; font-size: .8rem; white-space: nowrap; }
+  .fields-grid-2,
+  .fields-grid-3,
+  .fields-grid-4,
+  .edit-panel-grid { grid-template-columns: 1fr; }
+  .type-radios-row,
+  .status-button-group,
+  .editor-status-btns,
+  .cab-quick-actions { flex-wrap: wrap; }
+  .point-item-actions { width: 100%; }
+  .point-item-actions button { flex: 1; justify-content: center; }
+  .monitoring-kpi-bar { gap: .4rem; }
+  .kpi-btn-add-quick { margin-left: 0; width: 100%; justify-content: center; }
+  .table-search-box { min-width: 100%; }
+  .table-select-filters { width: 100%; }
+  .table-filter-select { flex: 1; min-width: 0; }
+  .admin-data-table { min-width: 720px; } /* скролл внутри контейнера */
+  .editor-col.grow { min-width: 100%; }
+  .export-action-block { flex-direction: column; align-items: stretch; }
+  .btn-export-csv { justify-content: center; }
+
+  /* iOS зумит страницу, если шрифт поля меньше 16px */
+  input, select, textarea { font-size: 16px !important; }
+
+  /* Удобные зоны нажатия */
+  .btn-submit, .rmod-btn-submit, .rmod-btn-cancel, .btn-close,
+  .btn-create-submit, .tab-btn, .stat-pill { min-height: 40px; }
+}
+
+/* ---------- Маленькие телефоны ---------- */
+@media (max-width: 480px) {
+  .admin-stats-grid,
+  .cab-stat-cards-grid { grid-template-columns: 1fr; }
+  .stats-row-grid { grid-template-columns: repeat(2, 1fr); }
+  .rmod-footer,
+  .modal-bottom { flex-direction: column-reverse; }
+  .rmod-footer button,
+  .modal-bottom button { width: 100%; justify-content: center; }
+  .btn-report-outage span { display: none; } /* оставляем только иконку */
+  .district-filter-row { flex-direction: column; align-items: stretch; }
+}

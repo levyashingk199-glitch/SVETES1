@@ -9,12 +9,17 @@ import AdminPanelModal from './components/Admin/AdminPanelModal';
 import AuthModal from './components/Modal/AuthModal';
 import CabinetModal from './components/Modal/CabinetModal';
 import { INCIDENT_TYPES, INCIDENT_STATUSES, TASHKENT_DISTRICTS } from './data/incidents';
-import { api, getSavedUser, setSavedUser, getToken, getLocalIncidents, setLocalIncidents } from './api';
+import { api, getSavedUser, setSavedUser, getToken } from './api';
 import './App.css';
+import './responsive.css'; // ВАЖНО: после App.css
+
+const MOBILE_QUERY = '(max-width: 768px)';
+const isMobileNow = () =>
+  typeof window !== 'undefined' && window.matchMedia(MOBILE_QUERY).matches;
 
 export default function App() {
-  // Only real user & admin points; no fake mock data
-  const [incidents, setIncidents] = useState(() => getLocalIncidents());
+  // Только реальные точки с сервера, без localStorage и моков
+  const [incidents, setIncidents] = useState([]);
   const [backendConnected, setBackendConnected] = useState(false);
   const [user, setUser] = useState(() => getSavedUser());
 
@@ -25,7 +30,8 @@ export default function App() {
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [modalIncident, setModalIncident] = useState(null);
   const [selectedIncident, setSelectedIncident] = useState(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  // На телефоне сайдбар по умолчанию закрыт, чтобы сразу была видна карта
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => !isMobileNow());
 
   // Map Location Picker State
   const [isSelectingLocation, setIsSelectingLocation] = useState(false);
@@ -38,23 +44,40 @@ export default function App() {
 
   const isAdmin = user?.role === 'admin' || user?.email === 'admin@netsveta.dev';
 
-  // Load Outages from Backend API or user localStorage (zero mock data)
+  // Гарантируем viewport-тег, чтобы не проверять index.html вручную
+  useEffect(() => {
+    let meta = document.querySelector('meta[name="viewport"]');
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.name = 'viewport';
+      document.head.appendChild(meta);
+    }
+    meta.content = 'width=device-width, initial-scale=1, viewport-fit=cover';
+  }, []);
+
+  // При переходе между мобильным и десктопным размером подстраиваем сайдбар
+  useEffect(() => {
+    const mq = window.matchMedia(MOBILE_QUERY);
+    const onChange = (e) => setIsSidebarOpen(!e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
+  // Загружаем точки ТОЛЬКО с сервера
   const loadOutages = useCallback(async () => {
     try {
-      const items = await api.getOutages();
-      if (items && Array.isArray(items)) {
+      const res = await api.getOutages();
+      const items = Array.isArray(res) ? res : (res?.outages || res?.data || res?.items);
+      if (Array.isArray(items)) {
         setIncidents(items);
-        setLocalIncidents(items);
         setBackendConnected(true);
         return;
       }
+      console.warn('Неожиданный формат ответа getOutages:', res);
     } catch (error) {
-      console.warn('Backend is offline, using user local storage:', error.message);
-      setBackendConnected(false);
+      console.warn('Backend offline:', error.message);
     }
-    // Load existing points saved by user/admin
-    const saved = getLocalIncidents();
-    setIncidents(saved);
+    setBackendConnected(false);
   }, []);
 
   useEffect(() => {
@@ -99,78 +122,52 @@ export default function App() {
     });
   }, [incidents, selectedDistrict, filterType, searchQuery]);
 
-  // Place a new point (Planned Works or Emergency) - created by real people/admin
+  // Выбор точки: на телефоне закрываем список, чтобы показать карту
+  const handleSelectIncident = (inc) => {
+    setSelectedIncident(inc);
+    if (isMobileNow()) setIsSidebarOpen(false);
+  };
+
+  // Создание точки: только через сервер, без локальных копий
   const handleAddPoint = async (pointData) => {
-    let savedPoint = null;
+    let savedPoint;
     try {
       savedPoint = await api.createOutage(pointData);
     } catch (err) {
-      // Кулдаун: не обходим лимит локальным сохранением
-      if (err.status >= 400 && err.status < 500) {
-        alert(err.message || 'Слишком часто. Подождите минуту перед следующей точкой');
-        throw err;
-      }
-      console.warn('Backend create failed, saving in local mode:', err.message);
-      const localId = `point-${Date.now()}`;
-      savedPoint = {
-        ...pointData,
-        id: localId,
-        _id: localId,
-      };
+      alert(err.message || 'Не удалось создать точку. Попробуйте позже');
+      throw err;
     }
-
-    setIncidents((prev) => {
-      const nextList = [savedPoint, ...prev];
-      setLocalIncidents(nextList);
-      return nextList;
-    });
-    setSelectedIncident(savedPoint);
+    setIncidents((prev) => [savedPoint, ...prev]);
+    handleSelectIncident(savedPoint);
     return savedPoint;
   };
 
-  // Delete point (Удаление точки)
+  // Удаление точки
   const handleDeletePoint = async (pointId) => {
     try {
       await api.deleteOutage(pointId);
     } catch (err) {
-      console.warn('Backend delete failed, removing locally:', err.message);
+      alert(err.message || 'Не удалось удалить точку');
+      return;
     }
-
-    setIncidents((prev) => {
-      const nextList = prev.filter((i) => i.id !== pointId && i._id !== pointId);
-      setLocalIncidents(nextList);
-      return nextList;
-    });
-
-    if (modalIncident && (modalIncident.id === pointId || modalIncident._id === pointId)) {
-      setModalIncident(null);
-    }
-    if (selectedIncident && (selectedIncident.id === pointId || selectedIncident._id === pointId)) {
-      setSelectedIncident(null);
-    }
+    setIncidents((prev) => prev.filter((i) => i.id !== pointId && i._id !== pointId));
+    if (modalIncident && (modalIncident.id === pointId || modalIncident._id === pointId)) setModalIncident(null);
+    if (selectedIncident && (selectedIncident.id === pointId || selectedIncident._id === pointId)) setSelectedIncident(null);
   };
 
-  // Update Point Process (Изменять процесс точки)
+  // Изменение процесса точки
   const handleUpdatePointProcess = async (pointId, { status, progress, processStage }) => {
     let updatedData = { status, progress, processStage };
     try {
       const res = await api.updateOutage(pointId, { status, progress, processStage });
       if (res) updatedData = { ...updatedData, ...res };
     } catch (err) {
-      console.warn('Backend update failed, updating locally:', err.message);
+      alert(err.message || 'Не удалось обновить точку');
+      throw err;
     }
-
-    setIncidents((prev) => {
-      const nextList = prev.map((i) =>
-        i.id === pointId || i._id === pointId ? { ...i, ...updatedData, status, progress, processStage } : i
-      );
-      setLocalIncidents(nextList);
-      return nextList;
-    });
-
-    if (modalIncident && (modalIncident.id === pointId || modalIncident._id === pointId)) {
-      setModalIncident((prev) => ({ ...prev, ...updatedData, status, progress, processStage }));
-    }
+    const isSame = (i) => i.id === pointId || i._id === pointId;
+    setIncidents((prev) => prev.map((i) => (isSame(i) ? { ...i, ...updatedData } : i)));
+    if (modalIncident && isSame(modalIncident)) setModalIncident((prev) => ({ ...prev, ...updatedData }));
     return updatedData;
   };
 
@@ -190,21 +187,20 @@ export default function App() {
     setUser(null);
   };
 
-  // Cabinet (org / admin): apply status change to local list
+  // Cabinet (org / admin): применяем смену статуса
   const handleStatusChangeSuccess = (updatedOutage) => {
-    setIncidents((prev) => {
-      const nextList = prev.map((inc) =>
+    setIncidents((prev) =>
+      prev.map((inc) =>
         inc._id === updatedOutage._id || inc.id === updatedOutage.id ? { ...inc, ...updatedOutage } : inc
-      );
-      setLocalIncidents(nextList);
-      return nextList;
-    });
+      )
+    );
   };
 
   // Location Picker Handlers
   const handleStartPickOnMap = () => {
     setIsAdminModalOpen(false);
     setIsSelectingLocation(true);
+    if (isMobileNow()) setIsSidebarOpen(false); // карта должна быть видна
   };
 
   const handleLocationSelected = ({ lat, lng }) => {
@@ -225,7 +221,7 @@ export default function App() {
   };
 
   return (
-    <div className="svetanet-app">
+    <div className={`svetanet-app${isSidebarOpen ? ' sidebar-open' : ''}`}>
       <Navbar
         onOpenReportModal={() => setIsReportModalOpen(true)}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
@@ -251,7 +247,7 @@ export default function App() {
           incidents={filteredIncidents}
           allIncidents={incidents}
           selectedIncident={selectedIncident}
-          onSelectIncident={(inc) => setSelectedIncident(inc)}
+          onSelectIncident={handleSelectIncident}
           onOpenDetails={(inc) => setModalIncident(inc)}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
@@ -263,15 +259,8 @@ export default function App() {
             try {
               await api.confirmOutage(id);
               loadOutages();
-            } catch {
-              // Local increment
-              setIncidents((prev) => {
-                const nextList = prev.map((i) =>
-                  i.id === id || i._id === id ? { ...i, reportsCount: (i.reportsCount || 0) + 1 } : i
-                );
-                setLocalIncidents(nextList);
-                return nextList;
-              });
+            } catch (err) {
+              alert(err.message || 'Не удалось подтвердить');
             }
           }}
           user={user}
